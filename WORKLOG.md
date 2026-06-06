@@ -61,6 +61,27 @@ Registro cronológico del trabajo realizado. Formato: fecha + fase + bullets con
   `CLAUDE.md` diagrama ASCII actualizado para mostrar las dos fuentes;
   `ROADMAP.md` sección Fase 1b añadida.
 
+### Repo
+
+- `git init` + `.gitignore` + commit inicial `b0555f5` (104 ficheros).
+
+### Fase 2 — Máquina de estados + UI en vivo
+
+- Smoke test híbrido en vivo: 4 instancias reales (3 fg + 1 bg) con orden por
+  urgencia, badge bg/fg y detalle de tool funcionando.
+- `project_from_cwd`: `$HOME` → `~` y abreviación a 2 últimos segmentos en
+  paths profundos (`~/…/CCTV/src-tauri`). Primeros tests unitarios del
+  proyecto (4, `cargo test`).
+- Estados bg restantes verificados empíricamente con jobs reales
+  (`claude --bg` + `claude stop`):
+  - `stopped` (parado a mano), `failed` (modelo inválido), `blocked` (pregunta).
+  - Hallazgo clave: permiso vs input NO se distingue por `state` —
+    `working`+`tempo=blocked` → permiso; `blocked`+`blocked` → input.
+  - `map_state(state, tempo)` reescrito; campo `needs` (pregunta o
+    "approve Tool: path") usado como detalle prioritario.
+- Footgun de CLI documentado: `claude --bg --help` lanza un job real en vez de
+  mostrar ayuda; el stop es `claude stop <id>` (no subcomando de `agents`).
+
 ---
 
-_Verificación final: `cargo check` 0 errores · `tsc --noEmit` 0 errores · `npm run build` clean._
+_Verificación final: `cargo check` 0 errores · `cargo test` 4/4 · `tsc --noEmit` 0 errores · `npm run build` clean._

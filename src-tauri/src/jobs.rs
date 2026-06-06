@@ -2,15 +2,24 @@
 //! supervisor de Claude Code (~/.claude/jobs/<id>/state.json) y vigila el
 //! directorio para reaccionar a los cambios. Ver docs/DATA-SOURCES.md.
 //!
-//! Esquema verificado empiricamente el 2026-06-06 contra
-//! ~/.claude/jobs/be4c186b/state.json. Campos reales:
-//!   state: "working" | "done" | ...
+//! Esquema verificado empiricamente el 2026-06-06 contra sesiones reales.
+//! Campos reales (todos camelCase en el JSON):
+//!   state:  "working" | "blocked" | "done" | "stopped" | "failed"
+//!   tempo:  "active" | "idle" | "blocked"  (ortogonal a state)
 //!   detail: string de progreso (NO existe summary/title — esos no son campos)
+//!   needs:  pregunta al usuario o "approve <Tool>: <path>" (permission)
 //!   intent: prompt original (fallback para detail)
-//!   name: nombre corto generado por el supervisor (opcional, campo "name")
-//!   sessionId: camelCase — el ID de sesion
-//!   daemonShort: prefijo corto = nombre del directorio
-//!   cwd, createdAt, updatedAt: RFC3339 (e.g. "2026-06-06T15:55:52.871Z")
+//!   name:   nombre corto generado por el supervisor (opcional)
+//!   sessionId, daemonShort, cwd, createdAt, updatedAt: camelCase
+//!
+//! Combinaciones observadas empiricamente:
+//!   state=working + tempo=active               → Working (procesando activamente)
+//!   state=working + tempo=idle                 → Working (esperando shell task)
+//!   state=working + tempo=blocked              → WaitingPermission (needs=approve …)
+//!   state=blocked + tempo=blocked              → WaitingInput (needs=<pregunta>)
+//!   state=done    + tempo=idle                 → Completed
+//!   state=stopped + tempo=idle                 → Unknown (detenido por usuario)
+//!   state=failed  + tempo=idle                 → Error
 
 use crate::state::{project_from_cwd, Instance, InstanceState, Source, Store};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -29,10 +38,16 @@ use tauri::{AppHandle, Emitter};
 struct JobState {
     /// ID de sesion — campo "sessionId" en el JSON.
     session_id: Option<String>,
-    /// Estado del trabajo: "working", "done", etc.
+    /// Estado macro del trabajo: "working" | "blocked" | "done" | "stopped" | "failed".
     state: Option<String>,
+    /// Ritmo ortogonal al estado: "active" | "idle" | "blocked".
+    /// Cuando state=working + tempo=blocked => esperando permiso.
+    /// Cuando state=blocked + tempo=blocked => esperando input del usuario.
+    tempo: Option<String>,
     /// Detalle de progreso (puede ser null cuando acaba de arrancar).
     detail: Option<String>,
+    /// Pregunta/accion pendiente: "approve Write: /path" (permiso) o pregunta libre (input).
+    needs: Option<String>,
     /// Prompt original del usuario — fallback para detail.
     intent: Option<String>,
     /// Nombre corto generado por el supervisor (campo "name").
@@ -49,18 +64,38 @@ fn jobs_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".claude").join("jobs"))
 }
 
-fn map_state(raw: &str) -> InstanceState {
-    match raw.to_lowercase().replace([' ', '-'], "_").as_str() {
-        "working" | "running" | "in_progress" => InstanceState::Working,
-        "blocked" | "needs_permission" | "permission" => InstanceState::WaitingPermission,
-        "needs_input" | "waiting" | "waiting_input" | "awaiting_input" => {
+/// Mapea los valores empíricos de state.json al InstanceState interno.
+///
+/// Requiere tanto `state` como `tempo` porque la distinción entre "esperando
+/// permiso" y "esperando input del usuario" NO está en `state` sino en la
+/// combinación state+tempo:
+///   - state=working + tempo=blocked → WaitingPermission (approve <Tool>)
+///   - state=blocked + tempo=blocked → WaitingInput (pregunta al usuario)
+fn map_state(raw_state: &str, raw_tempo: &str) -> InstanceState {
+    let state = raw_state.to_lowercase().replace([' ', '-'], "_");
+    let tempo = raw_tempo.to_lowercase().replace([' ', '-'], "_");
+
+    match state.as_str() {
+        // Activo o esperando resultado de shell task en background.
+        "working" | "running" | "in_progress" => {
+            // Si tempo=blocked, el agente está detenido esperando aprobación
+            // de un tool use (Write, Bash, etc.). El needs="approve ..." lo confirma.
+            if tempo == "blocked" {
+                InstanceState::WaitingPermission
+            } else {
+                InstanceState::Working
+            }
+        }
+        // El agente hizo una pregunta al usuario y espera respuesta.
+        // Observado: state=blocked + tempo=blocked + needs=<pregunta libre>.
+        "blocked" | "needs_input" | "waiting_input" | "awaiting_input" => {
             InstanceState::WaitingInput
         }
-        // "done" es el valor observado empiricamente para completado.
+        // "done" es el valor observado empiricamente para completado OK.
         "completed" | "done" => InstanceState::Completed,
         "idle" => InstanceState::Idle,
         "failed" | "error" => InstanceState::Error,
-        // "stopped" en Agent View se muestra como gris sin estado util.
+        // "stopped" = el usuario lo detuvo; se muestra en gris sin accion util.
         "stopped" => InstanceState::Unknown,
         _ => InstanceState::Unknown,
     }
@@ -131,13 +166,16 @@ fn scan() -> Vec<Instance> {
         }
 
         let raw_state = js.state.unwrap_or_default();
+        let raw_tempo = js.tempo.unwrap_or_default();
         let cwd = js.cwd.unwrap_or_default();
 
-        // detail: preferimos "detail" del JSON, luego "intent" (prompt original),
-        // luego "name" (generado por el supervisor).
+        // detail: si hay accion pendiente ("needs": pregunta o "approve ..."),
+        // es lo mas util de mostrar; si no, "detail", luego "intent" (prompt
+        // original), luego "name" (generado por el supervisor).
         let detail = js
-            .detail
+            .needs
             .filter(|s| !s.is_empty())
+            .or_else(|| js.detail.filter(|s| !s.is_empty()))
             .or_else(|| js.intent.filter(|s| !s.is_empty()))
             .or(js.name);
 
@@ -158,7 +196,7 @@ fn scan() -> Vec<Instance> {
             session_id: id,
             project: project_from_cwd(&cwd),
             cwd,
-            state: map_state(&raw_state),
+            state: map_state(&raw_state, &raw_tempo),
             detail,
             source: Source::Background,
             started_at,

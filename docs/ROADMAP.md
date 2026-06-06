@@ -31,15 +31,21 @@ Marca `[x]` lo hecho. Cada fase debería dejar la app en un estado arrancable.
 - [x] Estados `Completed` y `Error` añadidos a `InstanceState` con urgency.
 - [x] Badge `bg`/`fg` discreto en cada fila de la UI.
 - [x] Traducciones de `state.completed` y `state.error` en los 8 idiomas.
-- [ ] Ejercitar estados de background no observados aún (`needs_input`, `failed`,
-      `stopped`) con sesiones reales para confirmar el mapeo.
+- [x] Ejercitar estados de background no observados con sesiones reales.
+      Hallazgo: `state` solo no distingue permiso de input — la clave es la
+      combinación `state`+`tempo` (working+blocked → permiso; blocked+blocked
+      → input). `map_state` ajustado; campo `needs` usado como detalle.
 
-## Fase 2 — Máquina de estados + UI en vivo
-- [ ] Transiciones de `state.rs` completas y probadas con sesiones reales.
-- [ ] `emit("instances", ...)` y el frontend pinta cambios en vivo.
-- [ ] Orden por urgencia (permiso > input > trabajando > idle/unknown).
-- [ ] Derivar nombre de proyecto desde `cwd` (último segmento o `~/...`).
-- [ ] Resumen del detalle de tool (`tool_name` + corte de `tool_input`).
+## Fase 2 — Máquina de estados + UI en vivo ✅
+- [x] Transiciones de `state.rs` completas y probadas con sesiones reales
+      (fg vía hooks; bg vía experimentos con `claude --bg` + `claude stop`).
+- [x] `emit("instances", ...)` y el frontend pinta cambios en vivo.
+- [x] Orden por urgencia (permiso > input > error > trabajando > unknown >
+      idle > completado).
+- [x] Derivar nombre de proyecto desde `cwd`: `$HOME` → `~`, abreviado a los
+      2 últimos segmentos si es profundo. Con tests unitarios (`cargo test`).
+- [x] Resumen del detalle de tool (`tool_name` + corte de `tool_input`),
+      verificado en vivo ("Bash · git ls-remote …").
 
 ## Fase 3 — Sesiones muertas
 - [ ] Reaper TTL: `Working` viejo → `Unknown`; muy viejo → eliminar.

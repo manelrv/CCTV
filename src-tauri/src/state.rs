@@ -73,15 +73,34 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-/// Deriva un nombre legible del proyecto a partir del cwd.
-/// TODO(claude-code): colapsar $HOME a ~ y quizas mostrar 2 ultimos segmentos.
+/// Deriva un nombre legible del proyecto a partir del cwd: colapsa $HOME a `~`
+/// y, si el path es profundo, abrevia el medio dejando los 2 ultimos segmentos.
+/// Ej: /Users/x/dev/agent-os -> ~/dev/agent-os
+///     /Users/x/a/b/CCTV/src-tauri -> ~/…/CCTV/src-tauri
 pub(crate) fn project_from_cwd(cwd: &str) -> String {
-    cwd.trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .filter(|s| !s.is_empty())
-        .unwrap_or(cwd)
-        .to_string()
+    let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
+    project_from_cwd_with_home(cwd, home.as_deref())
+}
+
+fn project_from_cwd_with_home(cwd: &str, home: Option<&str>) -> String {
+    let cwd = cwd.trim_end_matches('/');
+    if cwd.is_empty() {
+        return String::new();
+    }
+    let (prefix, rest) = match home.map(|h| h.trim_end_matches('/')) {
+        Some(h) if cwd == h => return "~".to_string(),
+        Some(h) if cwd.starts_with(&format!("{h}/")) => ("~", &cwd[h.len() + 1..]),
+        _ => ("", cwd.trim_start_matches('/')),
+    };
+    let segments: Vec<&str> = rest.split('/').filter(|s| !s.is_empty()).collect();
+    match segments.len() {
+        0 => prefix.to_string(),
+        1 | 2 if !prefix.is_empty() => format!("{}/{}", prefix, segments.join("/")),
+        1 => segments[0].to_string(),
+        2 => segments.join("/"),
+        n if !prefix.is_empty() => format!("{}/…/{}/{}", prefix, segments[n - 2], segments[n - 1]),
+        n => format!("…/{}/{}", segments[n - 2], segments[n - 1]),
+    }
 }
 
 impl Store {
@@ -198,5 +217,42 @@ impl Store {
             .values()
             .filter(|i| i.state.needs_attention())
             .count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HOME: Option<&str> = Some("/Users/x");
+
+    #[test]
+    fn collapses_home_to_tilde() {
+        assert_eq!(project_from_cwd_with_home("/Users/x/dev/agent-os", HOME), "~/dev/agent-os");
+        assert_eq!(project_from_cwd_with_home("/Users/x/CCTV", HOME), "~/CCTV");
+        assert_eq!(project_from_cwd_with_home("/Users/x", HOME), "~");
+    }
+
+    #[test]
+    fn abbreviates_deep_paths_keeping_last_two_segments() {
+        assert_eq!(
+            project_from_cwd_with_home("/Users/x/a/b/CCTV/src-tauri", HOME),
+            "~/…/CCTV/src-tauri"
+        );
+        assert_eq!(project_from_cwd_with_home("/opt/srv/apps/web", None), "…/apps/web");
+    }
+
+    #[test]
+    fn handles_paths_outside_home() {
+        assert_eq!(project_from_cwd_with_home("/opt/web", None), "opt/web");
+        assert_eq!(project_from_cwd_with_home("/srv", None), "srv");
+        assert_eq!(project_from_cwd_with_home("/Users/other/app", HOME), "…/other/app");
+    }
+
+    #[test]
+    fn handles_edge_cases() {
+        assert_eq!(project_from_cwd_with_home("", HOME), "");
+        assert_eq!(project_from_cwd_with_home("/Users/x/", HOME), "~");
+        assert_eq!(project_from_cwd_with_home("relative/path", None), "relative/path");
     }
 }
