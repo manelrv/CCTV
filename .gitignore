@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Tooling / IDE
+.idea/
+.qodo/
+.atl/
+.DS_Store

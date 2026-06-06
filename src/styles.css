@@ -1,0 +1,221 @@
+:root {
+  --bg: rgba(28, 28, 30, 0.92);
+  --bg-elev: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: rgba(255, 255, 255, 0.92);
+  --text-dim: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.35);
+  --c-permission: #ff6b5e;
+  --c-input: #f4be4f;
+  --c-working: #61c554;
+  --c-completed: #30d158;
+  --c-error: #ff453a;
+  --c-idle: #8e8e93;
+  --c-unknown: #6e6e73;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent; /* ventana transparente: el panel dibuja el fondo */
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  backdrop-filter: blur(20px);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--border);
+  cursor: grab; /* zona arrastrable (data-tauri-drag-region) */
+}
+.titlebar:active {
+  cursor: grabbing;
+}
+.title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-elev);
+}
+.summary .attention {
+  color: var(--c-permission);
+  font-weight: 500;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.empty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--border);
+}
+.row:last-child {
+  border-bottom: none;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--c-idle);
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+.project {
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Badge discreto bg/fg: abreviatura universal, sin traducir. */
+.source-badge {
+  font-size: 9px;
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  padding: 1px 4px;
+  letter-spacing: 0.02em;
+}
+.detail {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-meta {
+  text-align: right;
+  flex-shrink: 0;
+}
+.state {
+  font-size: 11px;
+  font-weight: 500;
+}
+.time {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+
+/* Colores por estado: tinen el dot, la etiqueta y el fondo de la fila si reclama */
+.s-permission .dot,
+.s-permission .state {
+  color: var(--c-permission);
+  background: var(--c-permission);
+}
+.s-permission .state {
+  background: none;
+}
+.s-permission {
+  background: rgba(255, 107, 94, 0.1);
+}
+
+.s-input .dot {
+  background: var(--c-input);
+}
+.s-input .state {
+  color: var(--c-input);
+}
+.s-input {
+  background: rgba(244, 190, 79, 0.08);
+}
+
+.s-working .dot {
+  background: var(--c-working);
+}
+.s-working .state {
+  color: var(--c-working);
+}
+
+.s-idle .dot {
+  background: var(--c-idle);
+}
+.s-idle .project,
+.s-idle .state,
+.s-idle .time {
+  color: var(--text-dim);
+}
+
+.s-unknown .dot {
+  background: var(--c-unknown);
+}
+.s-unknown .state {
+  color: var(--text-faint);
+}
+
+.s-completed .dot {
+  background: var(--c-completed);
+}
+.s-completed .state {
+  color: var(--c-completed);
+}
+.s-completed .project,
+.s-completed .detail,
+.s-completed .time {
+  color: var(--text-dim);
+}
+
+.s-error .dot {
+  background: var(--c-error);
+}
+.s-error .state {
+  color: var(--c-error);
+}
+.s-error {
+  background: rgba(255, 69, 58, 0.08);
+}

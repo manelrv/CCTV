@@ -1,0 +1,63 @@
+{
+  "_comment": "Fusiona la clave 'hooks' dentro de tu ~/.claude/settings.json. Cada hook hace POST al servidor local de la app (puerto 8787). timeout corto y errores no bloqueantes: si la app esta cerrada, el hook falla en silencio sin frenar a Claude Code.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/session-start", "timeout": 3 }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/session-end", "timeout": 3 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/user-prompt", "timeout": 3 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/pre-tool", "timeout": 3 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/post-tool", "timeout": 3 }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/notification/permission", "timeout": 3 }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/notification/idle", "timeout": 3 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:8787/hooks/stop", "timeout": 3 }
+        ]
+      }
+    ]
+  }
+}
