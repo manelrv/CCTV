@@ -60,6 +60,15 @@ struct JobState {
     created_at: Option<String>,
     /// Last-updated timestamp — RFC3339/ISO 8601.
     updated_at: Option<String>,
+    /// Subtasks the supervisor is running for this job. Observed shape:
+    /// {"tasks": 0, "queued": 0, "kinds": []} — or null.
+    in_flight: Option<InFlight>,
+}
+
+#[derive(Deserialize, Default)]
+struct InFlight {
+    tasks: Option<u32>,
+    queued: Option<u32>,
 }
 
 fn jobs_dir() -> Option<PathBuf> {
@@ -210,6 +219,11 @@ fn scan() -> Vec<Instance> {
             .as_deref()
             .and_then(transcript::read_context_tokens);
 
+        // Subtasks in flight: tasks + queued, shown only when > 0.
+        let in_flight_tasks = js.in_flight.as_ref().map(|f| {
+            f.tasks.unwrap_or(0) + f.queued.unwrap_or(0)
+        });
+
         out.push(Instance {
             session_id: id,
             project: project_from_cwd(&cwd),
@@ -220,6 +234,7 @@ fn scan() -> Vec<Instance> {
             started_at,
             last_event_at,
             context_tokens,
+            in_flight_tasks,
         });
     }
     out

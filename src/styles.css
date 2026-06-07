@@ -129,6 +129,16 @@ body {
   padding: 1px 4px;
   letter-spacing: 0.02em;
 }
+/* In-flight subtasks badge (background jobs only): same family as source-badge,
+   slightly tinted because it signals live activity. */
+.inflight-badge {
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--c-working);
+  background: rgba(48, 209, 88, 0.12);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
 .detail {
   font-size: 11px;
   color: var(--text-dim);
@@ -163,6 +173,16 @@ body {
   font-family: var(--mono);
   color: var(--text-faint);
   opacity: 0.7;
+}
+/* Threshold colors: amber from 75% of the inferred window, red from 90%. */
+.ctx-tokens.ctx-warn {
+  color: var(--c-input);
+  opacity: 0.9;
+}
+.ctx-tokens.ctx-crit {
+  color: var(--c-error);
+  opacity: 1;
+  font-weight: 600;
 }
 
 /* State colors: tint the dot, the label, and the row background when attention is needed. */

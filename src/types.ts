@@ -29,6 +29,8 @@ export interface Instance {
   last_event_at: number; // epoch secs
   /** Sum of input + cache_read + cache_creation tokens from the last assistant message. */
   context_tokens: number | null;
+  /** Background only: subtasks in flight (tasks + queued). Null for foreground. */
+  in_flight_tasks: number | null;
 }
 
 /**
@@ -53,6 +55,24 @@ export function copyPayload(inst: Instance): string {
 export function formatTokens(n: number): string {
   if (n < 1000) return String(n);
   return `${Math.round(n / 1000)}k`;
+}
+
+/**
+ * Severity of the context occupancy relative to the inferred window.
+ *
+ * The transcript's model field does not distinguish 200k from 1M context
+ * variants (verified empirically: a 307k-token session reports plain
+ * "claude-opus-4-8"). Heuristic: tokens above 200k imply a 1M window; since
+ * context only grows within a session, the inference is monotonic.
+ * Known limitation: a 1M session between 150k and 200k shows an early
+ * warning until it crosses 200k.
+ */
+export function tokenLevel(n: number): "ok" | "warn" | "crit" {
+  const window = n > 200_000 ? 1_000_000 : 200_000;
+  const ratio = n / window;
+  if (ratio >= 0.9) return "crit";
+  if (ratio >= 0.75) return "warn";
+  return "ok";
 }
 
 // Translation keys for each state (resolved via t() in the component).

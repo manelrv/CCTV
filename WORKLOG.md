@@ -239,6 +239,22 @@ Chronological log of work completed. Format: date + phase + concise bullets.
   correctly. Requires manual verification.
 - **Verification**: `tsc --noEmit` 0 errors · `npm run build` clean · `cargo check` 0 errors
   · `cargo test` 34/34 (no new Rust code, test count unchanged).
+- **Bonus fix**: tray Quit was dead since the scaffold — `ExitRequested` was prevented
+  unconditionally (the keep-alive-in-tray handler). Now only window-close
+  (`code: None`) is prevented; explicit `app.exit(0)` passes through.
+
+### Token counter thresholds + inFlight badge
+
+- **Token colors**: `tokenLevel()` in types.ts — amber at 75%, red at 90% of the
+  inferred window. The transcript model field does NOT distinguish 200k from 1M
+  variants (verified: a 307k session reports plain "claude-opus-4-8"), so the
+  window is inferred: >200k tokens ⇒ 1M. Monotonic per session; known limitation:
+  a 1M session between 150k–200k warns early until it crosses 200k.
+- **inFlight badge**: bg jobs show "⚙ N" (tasks + queued) next to the source badge
+  while the supervisor runs subtasks. Shape verified empirically:
+  `inFlight: {"tasks": 1, "queued": 0, "kinds": ["local_bash"]}` during a live
+  shell task. Parsed in `jobs.rs` (`InFlight` struct), `Instance.in_flight_tasks`,
+  end-to-end verified via `/debug/snapshot`.
 
 ---
 

@@ -74,6 +74,9 @@ pub struct Instance {
     /// Sum of input_tokens + cache_read_input_tokens + cache_creation_input_tokens
     /// from the last assistant message in the transcript. None until first read.
     pub context_tokens: Option<u64>,
+    /// Background only: subtasks currently running according to the supervisor
+    /// (inFlight.tasks in state.json). None for foreground or when absent.
+    pub in_flight_tasks: Option<u32>,
 }
 
 #[derive(Default)]
@@ -139,6 +142,7 @@ impl Store {
             started_at: ts,
             last_event_at: ts,
             context_tokens: None,
+            in_flight_tasks: None,
         });
         if !cwd.is_empty() {
             entry.cwd = cwd.clone();
@@ -271,6 +275,7 @@ mod tests {
             started_at: ts,
             last_event_at: ts,
             context_tokens: None,
+            in_flight_tasks: None,
         }
     }
 
