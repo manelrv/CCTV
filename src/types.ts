@@ -31,6 +31,14 @@ export interface Instance {
   context_tokens: number | null;
   /** Background only: subtasks in flight (tasks + queued). Null for foreground. */
   in_flight_tasks: number | null;
+  /** Terminal hosting this session. Foreground only; null for background or before the first enriched hook. */
+  terminal: {
+    program: string;
+    session_id: string | null;
+    tty: string | null;
+    /** Deep link for exact-pane focus (e.g. "warp://session/<32hex>"). Null when not available. */
+    focus_url: string | null;
+  } | null;
 }
 
 /**

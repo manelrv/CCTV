@@ -56,6 +56,23 @@ are managed by the supervisor files lifecycle).
   (via `tauri-plugin-autostart`). `persist_and_sync()` updates disk + managed state.
 - `config.rs` — preferences persistence. `load_from_path()` and
   `default_prefs_path()` allow initializing `PrefsState` before setup().
+- `focus.rs` — macOS-only (`#![cfg(target_os = "macos")]`). `focus_terminal(term: &TerminalRef) -> bool`
+  brings the terminal window/tab hosting a session to the foreground. Four tiers:
+  (0) **generic focus URL**: if `TerminalRef.focus_url` is present and passes validation,
+  runs `open <url>` via `std::process::Command` (argv, not shell). Warp exposes
+  `WARP_FOCUS_URL=warp://session/<32hex>` (captured by `session-env.sh`); any terminal
+  that exposes a similar deep link gets exact-pane focus through this tier.
+  Validation (`is_valid_focus_url`): must start with `warp://` or `warposs://`, length < 256,
+  only URL-safe chars `[A-Za-z0-9:/._-]`;
+  (1) **iTerm2**: AppleScript iterates windows → tabs → sessions matching the UUID from
+  `ITERM_SESSION_ID`; (2) **Apple Terminal**: AppleScript matches `tty of t` against
+  `/dev/<tty>`; (3) **anything else**: best-effort `tell application ... activate` using
+  a static `TERM_PROGRAM → app name` map. Values interpolated into AppleScript are
+  validated against strict allowlists (UUID: hex+hyphens 36 chars; tty: alphanumeric+`/`)
+  before use — any value that fails validation falls back to the next tier.
+  The Automation permission prompt appears on first use (macOS 10.14+); after that, the
+  system remembers the grant. Invoked from the `focus_session` Tauri command (async thread —
+  no main-thread requirement for `std::process::Command`).
 - `hooks.rs` — serde types for the payloads.
 - `transcript.rs` — reads context token occupancy from Claude Code transcript files
   (`~/.claude/projects/<slug>/<session_id>.jsonl`). Exports `cwd_to_slug` (replaces

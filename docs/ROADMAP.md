@@ -117,7 +117,16 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
       localized "Copied" for 1.2 s then reverts. Uses `tauri-plugin-clipboard-manager`
       (avoids `navigator.clipboard` which is flaky in WKWebView). i18n in all 8 languages.
 
+## Extras (continued)
+- [x] Click-to-focus (macOS): clicking a foreground row with terminal info invokes
+      `focus_session` → `focus.rs` → AppleScript. Three tiers: iTerm2 (by session UUID),
+      Apple Terminal (by tty), anything else (best-effort app activation).
+      Alt+click, background rows, and rows without terminal info keep the previous
+      copy behavior (cwd / `claude attach <shortId>`). Copy is also the fallback if
+      focus returns false (non-macOS, AppleScript error, Automation permission denied).
+      Terminal env captured by `hooks/session-env.sh` (command-type hook) on
+      `SessionStart` and `UserPromptSubmit`. Stored in `Instance.terminal: Option<TerminalRef>`.
+
 ## Ideas / backlog
-- Click on a row → bring that terminal to the foreground (difficult cross-platform).
 - Session time history (SQLite) for metrics.
 - Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.

@@ -235,6 +235,7 @@ fn scan() -> Vec<Instance> {
             last_event_at,
             context_tokens,
             in_flight_tasks,
+            terminal: None, // Background sessions don't run in a user-visible terminal.
         });
     }
     out

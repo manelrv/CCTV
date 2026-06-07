@@ -6,6 +6,22 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Terminal reference captured from the claude process environment at session
+/// start (and refreshed on the first user prompt). Used by focus.rs to bring
+/// the right terminal window/tab to the foreground when the user clicks a row.
+#[derive(Clone, Serialize, PartialEq, Debug)]
+pub struct TerminalRef {
+    /// Value of $TERM_PROGRAM (e.g. "iTerm.app", "Apple_Terminal", "WarpTerminal").
+    pub program: String,
+    /// Value of $ITERM_SESSION_ID or $TERM_SESSION_ID (e.g. "w0t0p0:UUID").
+    pub session_id: Option<String>,
+    /// TTY of the claude parent process (e.g. "ttys003").
+    pub tty: Option<String>,
+    /// Terminal focus deep link (e.g. "warp://session/<32hex>"). When present,
+    /// `open <url>` brings the exact pane to the foreground (tier 0 in focus.rs).
+    pub focus_url: Option<String>,
+}
+
 /// Working with no new events for longer than this -> considered Unknown.
 pub const STALE_SECS: u64 = 180;
 /// Any state with no events for longer than this -> removed from the store.
@@ -77,6 +93,10 @@ pub struct Instance {
     /// Background only: subtasks currently running according to the supervisor
     /// (inFlight.tasks in state.json). None for foreground or when absent.
     pub in_flight_tasks: Option<u32>,
+    /// Terminal where this session is running. Captured from the claude process
+    /// environment on SessionStart / UserPromptSubmit (foreground only).
+    /// None for background sessions or before the first enriched hook arrives.
+    pub terminal: Option<TerminalRef>,
 }
 
 #[derive(Default)]
@@ -143,6 +163,7 @@ impl Store {
             last_event_at: ts,
             context_tokens: None,
             in_flight_tasks: None,
+            terminal: None,
         });
         if !cwd.is_empty() {
             entry.cwd = cwd.clone();
@@ -167,6 +188,20 @@ impl Store {
         if let Some(inst) = map.get_mut(session_id) {
             if inst.context_tokens != Some(tokens) {
                 inst.context_tokens = Some(tokens);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Stores terminal reference for an existing foreground instance.
+    /// Returns true if the instance existed and the value changed, false otherwise.
+    /// Does NOT touch last_event_at (terminal info is not a session event).
+    pub fn set_terminal(&self, session_id: &str, term: TerminalRef) -> bool {
+        let mut map = self.inner.lock().unwrap();
+        if let Some(inst) = map.get_mut(session_id) {
+            if inst.terminal.as_ref() != Some(&term) {
+                inst.terminal = Some(term);
                 return true;
             }
         }
@@ -246,6 +281,13 @@ impl Store {
         v
     }
 
+    /// Returns a clone of the terminal ref for the given session, if any.
+    /// Used by the focus_session Tauri command to look up terminal info without
+    /// taking a long-lived lock.
+    pub fn inner_snapshot_terminal(&self, session_id: &str) -> Option<TerminalRef> {
+        self.inner.lock().unwrap().get(session_id)?.terminal.clone()
+    }
+
     pub fn attention_count(&self) -> usize {
         self.inner
             .lock()
@@ -276,6 +318,7 @@ mod tests {
             last_event_at: ts,
             context_tokens: None,
             in_flight_tasks: None,
+            terminal: None,
         }
     }
 
@@ -432,5 +475,87 @@ mod tests {
         store.apply("s1", Some("/tmp/s1"), InstanceState::Working, None);
         let tokens = store.inner.lock().unwrap().get("s1").unwrap().context_tokens;
         assert_eq!(tokens, Some(99999));
+    }
+
+    #[test]
+    fn set_terminal_stores_terminal_ref() {
+        let store = Store::default();
+        insert(&store, mk("s1", Source::Foreground, InstanceState::Working, 0));
+        let term = TerminalRef {
+            program: "iTerm.app".to_string(),
+            session_id: Some("w0t0p0:ABC-123".to_string()),
+            tty: Some("ttys003".to_string()),
+            focus_url: None,
+        };
+        assert!(store.set_terminal("s1", term.clone()));
+        let stored = store.inner.lock().unwrap().get("s1").unwrap().terminal.clone();
+        assert_eq!(stored, Some(term));
+    }
+
+    #[test]
+    fn set_terminal_returns_false_when_unchanged() {
+        let store = Store::default();
+        insert(&store, mk("s1", Source::Foreground, InstanceState::Working, 0));
+        let term = TerminalRef {
+            program: "iTerm.app".to_string(),
+            session_id: None,
+            tty: Some("ttys001".to_string()),
+            focus_url: None,
+        };
+        store.set_terminal("s1", term.clone());
+        // Same value again — no change
+        assert!(!store.set_terminal("s1", term));
+    }
+
+    #[test]
+    fn set_terminal_returns_false_for_unknown_session() {
+        let store = Store::default();
+        let term = TerminalRef {
+            program: "iTerm.app".to_string(),
+            session_id: None,
+            tty: None,
+            focus_url: None,
+        };
+        assert!(!store.set_terminal("nonexistent", term));
+    }
+
+    #[test]
+    fn apply_does_not_clobber_existing_terminal() {
+        let store = Store::default();
+        store.apply("s1", Some("/tmp/s1"), InstanceState::Working, None);
+        let term = TerminalRef {
+            program: "Apple_Terminal".to_string(),
+            session_id: None,
+            tty: Some("ttys007".to_string()),
+            focus_url: None,
+        };
+        store.set_terminal("s1", term.clone());
+        // A subsequent apply (next hook event) must NOT reset terminal
+        store.apply("s1", Some("/tmp/s1"), InstanceState::Idle, None);
+        let stored = store.inner.lock().unwrap().get("s1").unwrap().terminal.clone();
+        assert_eq!(stored, Some(term));
+    }
+
+    #[test]
+    fn set_terminal_focus_url_round_trips() {
+        let store = Store::default();
+        insert(&store, mk("warp1", Source::Foreground, InstanceState::Working, 0));
+        let term = TerminalRef {
+            program: "WarpTerminal".to_string(),
+            session_id: None,
+            tty: None,
+            focus_url: Some("warp://session/9f6d05b9e7974a4fb0c5c489a44a3dbf".to_string()),
+        };
+        assert!(store.set_terminal("warp1", term.clone()));
+        let stored = store.inner.lock().unwrap().get("warp1").unwrap().terminal.clone();
+        assert_eq!(stored, Some(term));
+        // Same value again must return false (no change)
+        let term2 = TerminalRef {
+            program: "WarpTerminal".to_string(),
+            session_id: None,
+            tty: None,
+            focus_url: Some("warp://session/9f6d05b9e7974a4fb0c5c489a44a3dbf".to_string()),
+        };
+        assert!(!store.set_terminal("warp1", term2));
     }
 }

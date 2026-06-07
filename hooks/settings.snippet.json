@@ -1,10 +1,15 @@
 {
-  "_comment": "Merge the 'hooks' key into your ~/.claude/settings.json. Each hook POSTs to the app's local server (port 8787). Short timeout and non-blocking errors: if the app is closed, the hook fails silently without slowing Claude Code down.",
+  "_comment": "Merge the 'hooks' key into your ~/.claude/settings.json. SessionStart and UserPromptSubmit use 'command'-type hooks so they can enrich the payload with terminal env info (TERM_PROGRAM, ITERM_SESSION_ID, tty) before posting to the app. All other hooks POST directly via HTTP. IMPORTANT: replace /ABSOLUTE/PATH/TO/CCTV below with the actual absolute path where you cloned this repo.",
   "hooks": {
     "SessionStart": [
       {
+        "_comment": "command-type: the script reads TERM_PROGRAM / ITERM_SESSION_ID / tty from the claude process environment and enriches the payload before posting. Replace the path with the actual absolute path to your CCTV clone.",
         "hooks": [
-          { "type": "http", "url": "http://127.0.0.1:8787/hooks/session-start", "timeout": 3 }
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/CCTV/hooks/session-env.sh http://127.0.0.1:8787/hooks/session-start",
+            "timeout": 3
+          }
         ]
       }
     ],
@@ -17,8 +22,13 @@
     ],
     "UserPromptSubmit": [
       {
+        "_comment": "command-type: same as SessionStart — captures terminal env so the app can focus the right terminal tab when the user clicks a foreground row.",
         "hooks": [
-          { "type": "http", "url": "http://127.0.0.1:8787/hooks/user-prompt", "timeout": 3 }
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/CCTV/hooks/session-env.sh http://127.0.0.1:8787/hooks/user-prompt",
+            "timeout": 3
+          }
         ]
       }
     ],

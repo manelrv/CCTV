@@ -256,6 +256,78 @@ Chronological log of work completed. Format: date + phase + concise bullets.
   shell task. Parsed in `jobs.rs` (`InFlight` struct), `Instance.in_flight_tasks`,
   end-to-end verified via `/debug/snapshot`.
 
+### Click-to-focus (macOS terminal focus on row click)
+
+- **What**: Clicking a foreground row that has terminal info now brings the terminal
+  window/tab hosting that Claude Code session to the foreground instead of copying.
+  Alt+click, background rows, and rows with no terminal info keep the copy behavior.
+  If focus fails (AppleScript error, Automation permission denied, non-macOS), falls back to copy.
+- **Env-capture hook** (`hooks/session-env.sh`): new command-type hook script that enriches
+  the Claude Code hook payload with `term_program`, `term_session_id`, and `tty` by reading
+  the claude process environment (`$TERM_PROGRAM`, `$ITERM_SESSION_ID`/`$TERM_SESSION_ID`,
+  `ps -o tty= -p $PPID`). Python3 used for JSON safety (values passed via env vars — no
+  shell interpolation). Always exits 0; curl has a 2s hard timeout. Silent no-op when app is down.
+- **settings.snippet.json**: `SessionStart` and `UserPromptSubmit` converted from `type: http`
+  to `type: command` invoking the script. All other hooks remain HTTP.
+- **Backend**:
+  - `hooks.rs`: `HookPayload` gains `term_program`, `term_session_id`, `tty` (all `Option<String>`).
+  - `state.rs`: `TerminalRef { program, session_id, tty }` struct added (Clone, Serialize, PartialEq, Debug);
+    `Instance.terminal: Option<TerminalRef>` field added; `Store::set_terminal()` method; `apply()` does
+    NOT clobber existing terminal info (sets None only on new inserts); `Store::inner_snapshot_terminal()`
+    for the Tauri command lookup; `mk()` test helper updated.
+  - `jobs.rs`: `Instance` construction updated with `terminal: None`.
+  - `server.rs`: `session_start` and `user_prompt` handlers call `set_terminal()` when `term_program` is present.
+  - `focus.rs`: NEW macOS-only module. Three tiers: (1) iTerm2 by session UUID via AppleScript;
+    (2) Apple Terminal by tty via AppleScript; (3) generic app activation via TERM_PROGRAM→app name map.
+    Injection safety: UUID validated as hex+hyphen 36 chars; tty as alphanumeric+'/'. Values that fail
+    validation fall through to the next tier. App names in tier 3 come from a static map — no user data
+    is interpolated into that string.
+  - `main.rs`: `mod focus` added; `focus_session(session_id)` Tauri command registered.
+- **Frontend**:
+  - `types.ts`: `Instance.terminal` field added.
+  - `InstanceRow.tsx`: `handleClick` converted to async; invokes `focus_session` for foreground+terminal
+    rows; falls back to copy if it returns false or throws. Alt+click always copies.
+- **New tests**: 4 (set_terminal stores, unchanged returns false, unknown session, apply doesn't clobber).
+  Total: 38.
+- **Verification**: `cargo check` 0 errors · `cargo test` 38/38 · `tsc --noEmit` 0 errors · `npm run build` clean.
+- **GOTCHA**: macOS Automation permission prompt appears on first `focus_session` call; after granting once, it
+  is remembered. There is no way to pre-grant this — the user will see the system prompt on first click.
+- **BUGFIX (post-implementation)**: the iTerm2 AppleScript used `unique identifier of s`, which is
+  a SYNTAX ERROR in iTerm2's dictionary — the correct property is `id of s`. The script failed every
+  time and silently fell through to plain app activation (looked like "focus doesn't work"). Diagnosed
+  by running the script against a live iTerm2 session; corrected to `id of s` + `set index of w to 1`.
+  Verified live: iTerm2 now focuses the exact tab.
+- **Warp**: confirmed there is NO fix possible — Warp has no AppleScript/Shortcuts support and no way to
+  focus an existing session (warp:// only opens NEW tabs; feature request warpdotdev/warp#8611 pending).
+  Warp stays at tier 3 (app activation). iTerm2/Apple Terminal get exact-tab focus.
+- **Verified live**: iTerm2 exact-tab focus works. App was NOT broken — old sessions showed `term: None`
+  because they registered before the settings.json hook change (hooks load at session start).
+
+### Tier-0 focus URL — generic terminal deep-link focus (Warp)
+
+- **What**: Added a new tier 0 to `focus_terminal()` — higher priority than the
+  iTerm2/Terminal/program tiers. Any terminal that exposes a focus deep link gets
+  exact-pane focus via `open <url>` through this tier.
+- **Warp support**: Warp PR #11130 (merged) exposes `WARP_FOCUS_URL=warp://session/<32hex>`
+  (or `warposs://session/<32hex>` for the OSS build) in the claude process environment.
+  Running `open "$WARP_FOCUS_URL"` brings the exact Warp pane to the foreground.
+  Verified live: `WARP_FOCUS_URL=warp://session/9f6d05b9e7974a4fb0c5c489a44a3dbf`.
+- **Changes**:
+  - `hooks/session-env.sh`: captures `$WARP_FOCUS_URL` → `focus_url` JSON field.
+    Passed via env var to python3 (same injection-safe pattern as the other fields).
+  - `hooks.rs`: `HookPayload` gains `focus_url: Option<String>`.
+  - `state.rs`: `TerminalRef` gains `focus_url: Option<String>`.
+  - `server.rs`: `terminal_ref()` includes `focus_url` from the payload.
+  - `focus.rs`: tier 0 added before iTerm2 check; `is_valid_focus_url()` validates
+    scheme (`warp://` or `warposs://`), length (< 256), and chars (`[A-Za-z0-9:/._-]`).
+    `open` is called via argv — not a shell. 9 new unit tests for the validator.
+  - `types.ts`: `terminal.focus_url: string | null` added to the `Instance` type.
+- **Design decision**: tier 0 takes priority when `focus_url` is present — it is the
+  most direct path (OS deep link). iTerm2 and Apple Terminal generally do not set
+  `focus_url`, so they continue using their existing tiers unchanged.
+- **Test count**: 38 → 47 (+9 `is_valid_focus_url` tests, +1 `set_terminal_focus_url_round_trips`).
+- **Verification**: `cargo check` 0 errors · `cargo test` 47/47 · `tsc --noEmit` 0 errors · `npm run build` clean.
+
 ---
 
-_Final verification: `cargo check` 0 errors · `cargo test` 34/34 · `tsc --noEmit` 0 errors · `npm run build` clean._
+_Final verification: `cargo check` 0 errors · `cargo test` 47/47 · `tsc --noEmit` 0 errors · `npm run build` clean._

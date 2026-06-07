@@ -2,6 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+#[cfg(target_os = "macos")]
+mod focus;
 mod hooks;
 mod i18n;
 mod jobs;
@@ -102,7 +104,7 @@ fn main() {
             }
         })
         // Commands the frontend uses to fetch the snapshot and prefs on mount.
-        .invoke_handler(tauri::generate_handler![get_instances, get_prefs])
+        .invoke_handler(tauri::generate_handler![get_instances, get_prefs, focus_session])
         .build(tauri::generate_context!())
         .expect("error building the Tauri app")
         .run(|_app, event| {
@@ -123,4 +125,24 @@ fn get_instances(state: tauri::State<'_, Arc<state::Store>>) -> Vec<state::Insta
 #[tauri::command]
 fn get_prefs(state: tauri::State<'_, refresh::PrefsState>) -> config::Prefs {
     state.0.lock().unwrap().clone()
+}
+
+/// Attempts to focus the terminal window/tab hosting the given session.
+/// Returns true if focus was achieved (or best-effort app activation succeeded).
+/// Returns false on non-macOS platforms or when the session has no terminal info.
+#[tauri::command]
+fn focus_session(session_id: String, store: tauri::State<'_, std::sync::Arc<state::Store>>) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let terminal = {
+            // Snapshot a clone of the terminal ref so we release the lock immediately.
+            store.inner_snapshot_terminal(&session_id)
+        };
+        if let Some(term) = terminal {
+            return focus::focus_terminal(&term);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (session_id, store);
+    false
 }

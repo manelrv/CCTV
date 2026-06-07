@@ -4,7 +4,7 @@
 
 use crate::hooks::{summarize_detail, HookPayload};
 use crate::refresh;
-use crate::state::{InstanceState, Store};
+use crate::state::{InstanceState, Store, TerminalRef};
 use crate::transcript;
 use axum::{
     extract::State,
@@ -102,9 +102,25 @@ fn sid(p: &HookPayload) -> Option<String> {
     p.session_id.clone().filter(|s| !s.is_empty())
 }
 
+/// Extracts terminal info from a hook payload, if present and non-empty.
+/// Returns None if term_program is absent or blank (no point storing a ref
+/// without at least knowing which terminal app we are dealing with).
+fn terminal_ref(p: &HookPayload) -> Option<TerminalRef> {
+    let program = p.term_program.as_deref().filter(|s| !s.is_empty())?.to_string();
+    Some(TerminalRef {
+        program,
+        session_id: p.term_session_id.clone().filter(|s| !s.is_empty()),
+        tty: p.tty.clone().filter(|s| !s.is_empty()),
+        focus_url: p.focus_url.clone().filter(|s| !s.is_empty()),
+    })
+}
+
 async fn session_start(State(s): State<AppState>, Json(p): Json<HookPayload>) -> StatusCode {
     if let Some(id) = sid(&p) {
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Idle, None);
+        if let Some(term) = terminal_ref(&p) {
+            s.store.set_terminal(&id, term);
+        }
         emit(&s);
         spawn_transcript_read(s, id, p.transcript_path);
     }
@@ -122,6 +138,9 @@ async fn session_end(State(s): State<AppState>, Json(p): Json<HookPayload>) -> S
 async fn user_prompt(State(s): State<AppState>, Json(p): Json<HookPayload>) -> StatusCode {
     if let Some(id) = sid(&p) {
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Working, None);
+        if let Some(term) = terminal_ref(&p) {
+            s.store.set_terminal(&id, term);
+        }
         emit(&s);
         spawn_transcript_read(s, id, p.transcript_path);
     }

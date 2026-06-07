@@ -22,6 +22,18 @@ pub struct HookPayload {
 
     // SessionEnd / other
     pub reason: Option<String>,
+
+    // Terminal env fields — injected by hooks/session-env.sh on SessionStart
+    // and UserPromptSubmit. Absent on all other hook types.
+    /// Value of $TERM_PROGRAM in the claude process env (e.g. "iTerm.app", "Apple_Terminal").
+    pub term_program: Option<String>,
+    /// Value of $ITERM_SESSION_ID or $TERM_SESSION_ID (e.g. "w0t0p0:UUID").
+    pub term_session_id: Option<String>,
+    /// TTY of the claude process parent (e.g. "ttys003"). May be absent for detached sessions.
+    pub tty: Option<String>,
+    /// Terminal focus deep link (e.g. "warp://session/<32hex>" for Warp). When present,
+    /// `open <url>` brings the exact pane to the foreground. Injected from $WARP_FOCUS_URL.
+    pub focus_url: Option<String>,
 }
 
 /// Resumen corto para mostrar en la fila: "Bash · npm test", "Edit · src/app.ts".
