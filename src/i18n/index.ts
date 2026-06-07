@@ -10,8 +10,8 @@ import it from "./it";
 import ca from "./ca";
 import ru from "./ru";
 
-// Detecta el idioma del navegador, descarta la región (e.g. "es-ES" → "es").
-// Cae a "en" si el idioma no está soportado.
+// Detects the browser language and strips the region tag (e.g. "es-ES" → "es").
+// Falls back to "en" if the language is not supported.
 const SUPPORTED = ["en", "es", "pt", "de", "fr", "it", "ca", "ru"] as const;
 
 function detectLanguage(): string {
@@ -33,7 +33,7 @@ i18next.use(initReactI18next).init({
     ru: { translation: ru },
   },
   interpolation: {
-    // React ya escapa por defecto; no hace falta doble escape.
+    // React escapes by default; no need for double escaping.
     escapeValue: false,
   },
 });

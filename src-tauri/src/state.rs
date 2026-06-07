@@ -1,19 +1,19 @@
-//! Estado de las instancias de Claude Code: enum de estados, store en memoria,
-//! transiciones y reaper de sesiones muertas. Ver docs/HOOKS.md para el mapeo.
+//! State of Claude Code instances: state enum, in-memory store,
+//! transitions, and dead-session reaper. See docs/HOOKS.md for the mapping.
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Working sin nuevos eventos durante mas de esto -> se considera Unknown.
+/// Working with no new events for longer than this -> considered Unknown.
 pub const STALE_SECS: u64 = 180;
-/// Cualquier estado sin eventos durante mas de esto -> se elimina del store.
-/// (cubre el caso de matar la sesion sin que llegue SessionEnd)
+/// Any state with no events for longer than this -> removed from the store.
+/// (covers the case of killing a session without a SessionEnd arriving)
 pub const REMOVE_SECS: u64 = 1800;
 
-/// Origen de la instancia: ficheros del supervisor (segundo plano) o hooks HTTP
-/// (primer plano). Ver docs/DATA-SOURCES.md.
+/// Origin of the instance: supervisor files (background) or HTTP hooks
+/// (foreground). See docs/DATA-SOURCES.md.
 #[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
@@ -34,7 +34,7 @@ pub enum InstanceState {
 }
 
 impl InstanceState {
-    /// Menor = mas urgente. Define el orden en la lista.
+    /// Lower = more urgent. Defines sort order in the list.
     fn urgency(self) -> u8 {
         match self {
             InstanceState::WaitingPermission => 0,
@@ -46,7 +46,7 @@ impl InstanceState {
             InstanceState::Completed => 6,
         }
     }
-    /// Estados que "reclaman" al usuario (disparan auto-show de la ventana).
+    /// States that "demand" user attention (trigger auto-show of the floating window).
     pub fn needs_attention(self) -> bool {
         matches!(self, InstanceState::WaitingPermission | InstanceState::WaitingInput)
     }
@@ -73,10 +73,10 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-/// Deriva un nombre legible del proyecto a partir del cwd: colapsa $HOME a `~`
-/// y, si el path es profundo, abrevia el medio dejando los 2 ultimos segmentos.
-/// Ej: /Users/x/dev/agent-os -> ~/dev/agent-os
-///     /Users/x/a/b/CCTV/src-tauri -> ~/…/CCTV/src-tauri
+/// Derives a human-readable project name from cwd: collapses $HOME to `~`
+/// and, for deep paths, abbreviates the middle keeping the last 2 segments.
+/// E.g.: /Users/x/dev/agent-os -> ~/dev/agent-os
+///       /Users/x/a/b/CCTV/src-tauri -> ~/…/CCTV/src-tauri
 pub(crate) fn project_from_cwd(cwd: &str) -> String {
     let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
     project_from_cwd_with_home(cwd, home.as_deref())
@@ -104,9 +104,9 @@ fn project_from_cwd_with_home(cwd: &str, home: Option<&str>) -> String {
 }
 
 impl Store {
-    /// Aplica una transicion desde los hooks HTTP (fuente foreground): crea la
-    /// instancia si no existe, actualiza estado, detalle y last_event_at.
-    /// `detail` None deja el detalle como estaba.
+    /// Applies a transition from HTTP hooks (foreground source): creates the
+    /// instance if it does not exist, updates state, detail, and last_event_at.
+    /// `detail` of None leaves the existing detail unchanged.
     pub fn apply(
         &self,
         session_id: &str,
@@ -142,38 +142,38 @@ impl Store {
         self.inner.lock().unwrap().remove(session_id);
     }
 
-    /// Reemplaza el set completo de instancias background (Fuente A). Regla
-    /// "background manda": elimina cualquier foreground que comparta session_id
-    /// con una instancia incoming. Ver docs/DATA-SOURCES.md.
+    /// Replaces the full set of background instances (Source A). "Background wins"
+    /// rule: removes any foreground entry that shares a session_id with an incoming
+    /// instance. See docs/DATA-SOURCES.md.
     pub fn set_background_snapshot(&self, instances: Vec<Instance>) {
         let mut map = self.inner.lock().unwrap();
 
-        // Elimina todas las entradas background anteriores.
+        // Remove all existing background entries.
         map.retain(|_, inst| inst.source != Source::Background);
 
-        // Elimina cualquier foreground cuyo session_id aparece en el nuevo set.
+        // Remove any foreground entry whose session_id appears in the incoming set.
         let incoming_ids: std::collections::HashSet<&str> =
             instances.iter().map(|i| i.session_id.as_str()).collect();
         map.retain(|id, inst| {
             !(inst.source == Source::Foreground && incoming_ids.contains(id.as_str()))
         });
 
-        // Inserta el nuevo set background.
+        // Insert the new background set.
         for inst in instances {
             map.insert(inst.session_id.clone(), inst);
         }
     }
 
-    /// Pasa Working viejos a Unknown y elimina los muy viejos.
-    /// Solo actua sobre instancias Foreground: las Background las gestiona el
-    /// ciclo de vida de los ficheros del supervisor. Ver docs/DATA-SOURCES.md.
-    /// Devuelve true si algo cambio (para emitir snapshot solo cuando toca).
+    /// Transitions stale Working entries to Unknown and removes very old ones.
+    /// Only acts on Foreground instances: Background instances are managed by the
+    /// supervisor file lifecycle. See docs/DATA-SOURCES.md.
+    /// Returns true if anything changed (so the caller emits a snapshot only when needed).
     pub fn reap(&self) -> bool {
         let mut map = self.inner.lock().unwrap();
         let ts = now();
         let mut changed = false;
 
-        // Elimina foreground muy viejos.
+        // Remove very old foreground entries.
         map.retain(|_, inst| {
             if inst.source == Source::Foreground
                 && ts.saturating_sub(inst.last_event_at) > REMOVE_SECS
@@ -184,7 +184,7 @@ impl Store {
             true
         });
 
-        // Pasa foreground Working a Unknown si llevan mucho tiempo sin eventos.
+        // Transition foreground Working entries to Unknown if they have been silent too long.
         for inst in map.values_mut() {
             if inst.source == Source::Foreground
                 && inst.state == InstanceState::Working
@@ -197,7 +197,7 @@ impl Store {
         changed
     }
 
-    /// Snapshot ordenado por urgencia y, dentro de cada nivel, por actividad.
+    /// Snapshot sorted by urgency and, within each level, by recency.
     pub fn snapshot(&self) -> Vec<Instance> {
         let map = self.inner.lock().unwrap();
         let mut v: Vec<Instance> = map.values().cloned().collect();
@@ -226,7 +226,7 @@ mod tests {
 
     const HOME: Option<&str> = Some("/Users/x");
 
-    /// Construye una instancia con last_event_at desplazado `age_secs` al pasado.
+    /// Builds an instance with last_event_at shifted `age_secs` into the past.
     fn mk(id: &str, source: Source, state: InstanceState, age_secs: u64) -> Instance {
         let ts = now().saturating_sub(age_secs);
         Instance {

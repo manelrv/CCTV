@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Config alineada con Tauri: puerto fijo 1420, sin abrir navegador.
+// Config aligned with Tauri: fixed port 1420, no browser auto-open.
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,

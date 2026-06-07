@@ -1,4 +1,4 @@
-//! Preferencias del usuario, persistidas en un JSON del config dir de la app.
+//! User preferences, persisted as JSON in the app's config directory.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -47,8 +47,8 @@ pub fn save(app: &AppHandle, prefs: &Prefs) {
     }
 }
 
-/// Carga las prefs desde un path explicito (util para inicializar managed state
-/// antes de que el AppHandle este disponible en setup()).
+/// Loads prefs from an explicit path (useful for initializing managed state
+/// before the AppHandle is available in setup()).
 pub fn load_from_path(path: Option<PathBuf>) -> Prefs {
     let Some(p) = path else {
         return Prefs::default();
@@ -59,14 +59,14 @@ pub fn load_from_path(path: Option<PathBuf>) -> Prefs {
         .unwrap_or_default()
 }
 
-/// Devuelve el path estandar de prefs.json segun la plataforma, sin requerir
-/// AppHandle. Replica la logica de Tauri: config_dir + identifier de la app.
+/// Returns the platform-standard path for prefs.json without requiring an
+/// AppHandle. Mirrors Tauri's logic: config_dir + app identifier.
 ///
-/// En macOS: ~/Library/Application Support/com.fedefarma.ccmonitor/prefs.json
-/// En Linux: ~/.config/com.fedefarma.ccmonitor/prefs.json
-/// En Windows: %APPDATA%\com.fedefarma.ccmonitor\prefs.json
+/// macOS:   ~/Library/Application Support/com.fedefarma.ccmonitor/prefs.json
+/// Linux:   ~/.config/com.fedefarma.ccmonitor/prefs.json
+/// Windows: %APPDATA%\com.fedefarma.ccmonitor\prefs.json
 pub fn default_prefs_path() -> Option<PathBuf> {
-    // El identifier viene de tauri.conf.json -> "identifier".
+    // The identifier comes from tauri.conf.json -> "identifier".
     let identifier = "com.fedefarma.ccmonitor";
     let dir = dirs::config_dir()?.join(identifier);
     std::fs::create_dir_all(&dir).ok()?;

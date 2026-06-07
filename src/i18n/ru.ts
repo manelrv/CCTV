@@ -1,7 +1,7 @@
-// Ruso tiene 3 formas de plural:
-// _one  → 1, 21, 31 ... (termina en 1, excepto 11)
-// _few  → 2-4, 22-24 ... (termina en 2-4, excepto 12-14)
-// _many → 0, 5-20, 11-14, 25-30 ... (el resto)
+// Russian has 3 plural forms:
+// _one  → 1, 21, 31 ... (ends in 1, except 11)
+// _few  → 2-4, 22-24 ... (ends in 2-4, except 12-14)
+// _many → 0, 5-20, 11-14, 25-30 ... (everything else)
 const ru = {
   title: "CCTV",
 

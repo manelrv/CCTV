@@ -1,4 +1,4 @@
-/** Espejo TS de config::Prefs en Rust. Serializado por serde con snake_case. */
+/** TypeScript mirror of config::Prefs in Rust. Serialized by serde with snake_case. */
 export interface Prefs {
   floating_window: boolean;
   always_on_top: boolean;
@@ -29,7 +29,7 @@ export interface Instance {
   last_event_at: number; // epoch secs
 }
 
-// Claves de traducción para cada estado (resueltas via t() en el componente).
+// Translation keys for each state (resolved via t() in the component).
 export const STATE_I18N_KEY: Record<InstanceState, string> = {
   working: "state.working",
   waiting_permission: "state.waiting_permission",
@@ -40,7 +40,7 @@ export const STATE_I18N_KEY: Record<InstanceState, string> = {
   completed: "state.completed",
 };
 
-// Clase CSS por estado (los colores viven en styles.css).
+// CSS class per state (colors defined in styles.css).
 export const STATE_CLASS: Record<InstanceState, string> = {
   working: "s-working",
   waiting_permission: "s-permission",

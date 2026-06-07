@@ -14,7 +14,7 @@ const DEFAULT_PREFS: Prefs = {
 export default function App() {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
-  // "now" en segundos, refrescado cada segundo para los contadores de tiempo.
+  // "now" in seconds, refreshed every second for time counters.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {

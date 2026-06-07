@@ -1,6 +1,6 @@
-//! Tipos de los payloads de los hooks (campos comunes + los que usamos).
-//! serde ignora campos desconocidos, asi que solo modelamos lo necesario.
-//! Esquema verificado: https://code.claude.com/docs/en/hooks
+//! Hook payload types (common fields + those we actually use).
+//! serde ignores unknown fields, so we only model what we need.
+//! Schema verified at: https://code.claude.com/docs/en/hooks
 
 use serde::Deserialize;
 
@@ -10,14 +10,14 @@ pub struct HookPayload {
     pub cwd: Option<String>,
     pub hook_event_name: Option<String>,
 
-    // Eventos de herramienta
+    // Tool events
     pub tool_name: Option<String>,
     pub tool_input: Option<serde_json::Value>,
 
     // Notification
     pub message: Option<String>,
 
-    // SessionEnd / otros
+    // SessionEnd / other
     pub reason: Option<String>,
 }
 

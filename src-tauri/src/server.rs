@@ -1,6 +1,6 @@
-//! Servidor HTTP local que recibe los hooks de Claude Code.
-//! Cada handler: aplica al store -> emite snapshot al webview -> responde 200.
-//! Responder rapido es critico: un hook lento ralentiza la sesion del usuario.
+//! Local HTTP server that receives Claude Code hooks.
+//! Each handler: applies to the store -> emits snapshot to the webview -> responds 200.
+//! Fast response is critical: a slow hook stalls the user's session.
 
 use crate::hooks::{summarize_detail, HookPayload};
 use crate::refresh;
@@ -33,8 +33,8 @@ pub async fn serve(state: AppState) {
         .route("/hooks/notification/idle", post(notif_idle))
         .route("/hooks/stop", post(stop))
         .route("/health", post(|| async { StatusCode::OK }))
-        // Solo lectura, para depurar el store desde fuera (curl). Bind solo en
-        // loopback, sin datos sensibles mas alla de cwd/detalle.
+        // Read-only, for debugging the store externally (curl). Bound to loopback only;
+        // no sensitive data beyond cwd/detail.
         .route("/debug/snapshot", get(debug_snapshot))
         .with_state(state);
 
@@ -44,13 +44,13 @@ pub async fn serve(state: AppState) {
                 eprintln!("[server] error: {e}");
             }
         }
-        // TODO(claude-code): si el puerto esta ocupado, probar el siguiente o
-        // avisar al usuario por la bandeja.
-        Err(e) => eprintln!("[server] no se pudo bindear {BIND_ADDR}: {e}"),
+        // TODO(claude-code): if the port is busy, try the next one or
+        // notify the user via the tray.
+        Err(e) => eprintln!("[server] could not bind {BIND_ADDR}: {e}"),
     }
 }
 
-/// Propaga el estado al webview y a la bandeja. Delega en refresh::refresh().
+/// Propagates state to the webview and the tray. Delegates to refresh::refresh().
 fn emit(state: &AppState) {
     refresh::refresh(&state.app, &state.store);
 }

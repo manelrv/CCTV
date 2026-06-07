@@ -17,9 +17,9 @@ export function MonitorWindow({
   ).length;
 
   return (
-    // La clase "compact" activa las reglas CSS de modo compacto (styles.css).
+    // The "compact" class activates the compact-mode CSS rules (styles.css).
     <div className={compact ? "panel compact" : "panel"}>
-      {/* Barra de titulo: zona arrastrable para mover la ventana sin marco */}
+      {/* Title bar: draggable region for moving the frameless window */}
       <div className="titlebar" data-tauri-drag-region>
         <span className="title">{t("title")}</span>
       </div>

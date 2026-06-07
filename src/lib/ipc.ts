@@ -2,12 +2,12 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type { Instance, Prefs } from "../types";
 
-/** Suscribe a los snapshots que empuja el backend. Devuelve el unlisten. */
+/** Subscribes to snapshots pushed by the backend. Returns the unlisten function. */
 export function onInstances(cb: (rows: Instance[]) => void) {
   return listen<Instance[]>("instances", (e) => cb(e.payload));
 }
 
-/** Pide el snapshot inicial al montar (por si la app ya tenia estado). */
+/** Fetches the initial snapshot on mount (in case the app already had state). */
 export async function fetchInstances(): Promise<Instance[]> {
   try {
     return await invoke<Instance[]>("get_instances");
@@ -16,12 +16,12 @@ export async function fetchInstances(): Promise<Instance[]> {
   }
 }
 
-/** Suscribe a los cambios de preferencias empujados por el backend. */
+/** Subscribes to preference changes pushed by the backend. */
 export function onPrefs(cb: (prefs: Prefs) => void) {
   return listen<Prefs>("prefs", (e) => cb(e.payload));
 }
 
-/** Pide las preferencias actuales al montar. */
+/** Fetches the current preferences on mount. */
 export async function fetchPrefs(): Promise<Prefs> {
   try {
     return await invoke<Prefs>("get_prefs");

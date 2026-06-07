@@ -1,5 +1,5 @@
-//! Icono de bandeja + menu de preferencias.
-//! El proceso de bandeja es el que vive siempre y hostea el servidor de hooks.
+//! Tray icon + preferences menu.
+//! The tray process is the one that always lives and hosts the hook server.
 
 use crate::config;
 use crate::i18n;
@@ -11,7 +11,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
-// Icono inicial de bandeja en calma (embed en el binario).
+// Initial calm tray icon (embedded in the binary).
 const ICON_CALM: &[u8] = include_bytes!("../../icons/tray-calm-64.png");
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
@@ -49,7 +49,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         .item(&quit)
         .build()?;
 
-    // Icono inicial: calm (no hay instancias al arrancar).
+    // Initial icon: calm (no instances at startup).
     let calm_icon = tauri::image::Image::from_bytes(ICON_CALM)
         .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
 
@@ -90,7 +90,7 @@ fn handle_menu(app: &AppHandle, id: &str) {
 
         "toggle_auto_hide" => {
             prefs.auto_hide = !prefs.auto_hide;
-            // Aplica la nueva preferencia de inmediato segun el estado actual.
+            // Apply the new preference immediately based on the current state.
             if let Some(store) = app.try_state::<std::sync::Arc<crate::state::Store>>() {
                 let attention = store.attention_count();
                 refresh::apply_auto_hide(app, &prefs, attention);
@@ -100,14 +100,14 @@ fn handle_menu(app: &AppHandle, id: &str) {
 
         "toggle_compact" => {
             prefs.compact = !prefs.compact;
-            // Notifica al frontend para que aplique/quite la clase .compact.
+            // Notify the frontend so it applies or removes the .compact class.
             let _ = app.emit("prefs", &prefs);
             persist_and_sync(app, &prefs);
         }
 
         "toggle_at_login" => {
             prefs.open_at_login = !prefs.open_at_login;
-            // Delega en el plugin de autostart (ManagerExt::autolaunch()).
+            // Delegate to the autostart plugin (ManagerExt::autolaunch()).
             let manager = app.autolaunch();
             if prefs.open_at_login {
                 let _ = manager.enable();
@@ -121,7 +121,7 @@ fn handle_menu(app: &AppHandle, id: &str) {
     }
 }
 
-/// Persiste las prefs en disco y actualiza el managed state (PrefsState).
+/// Persists prefs to disk and updates the managed state (PrefsState).
 fn persist_and_sync(app: &AppHandle, prefs: &config::Prefs) {
     config::save(app, prefs);
     if let Some(state) = app.try_state::<PrefsState>() {
@@ -130,7 +130,7 @@ fn persist_and_sync(app: &AppHandle, prefs: &config::Prefs) {
 }
 
 fn toggle_window(app: &AppHandle, show: bool) {
-    // Delega en el helper thread-safe: las operaciones del NSPanel solo pueden
-    // ejecutarse en el main thread (ver refresh::set_panel_visible).
+    // Delegate to the thread-safe helper: NSPanel operations can only run on the
+    // main thread (see refresh::set_panel_visible).
     refresh::set_panel_visible(app, show);
 }

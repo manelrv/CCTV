@@ -1,4 +1,4 @@
-// Evita la consola en Windows release.
+// Suppresses the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
@@ -19,10 +19,10 @@ use tauri::Manager;
 fn main() {
     let store = Arc::new(state::Store::default());
 
-    // Carga las prefs en managed state para que refresh() las lea sin I/O de disco.
+    // Load prefs into managed state so refresh() can read them without disk I/O.
     let initial_prefs = {
-        // Necesitamos las prefs antes de setup() para inicializar el managed state.
-        // Usamos el path de config estandar de la plataforma directamente.
+        // We need prefs before setup() to initialize managed state.
+        // Use the platform-standard config path directly.
         config::load_from_path(config::default_prefs_path())
     };
     let prefs_state = refresh::PrefsState(std::sync::Mutex::new(initial_prefs));
@@ -46,15 +46,14 @@ fn main() {
             move |app| {
                 let handle = app.handle().clone();
 
-                // En macOS la app debe ser Accessory (utilidad de menubar, sin
-                // icono en el Dock): una app Regular no puede meter ventanas en
-                // el Space fullscreen de otra app por alto que sea su level.
+                // On macOS the app must be Accessory (menu-bar utility, no Dock icon):
+                // a Regular-policy app cannot place windows in another app's fullscreen
+                // Space regardless of window level.
                 #[cfg(target_os = "macos")]
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-                // Ventana flotante: convierte a NSPanel (macOS) para poder flotar
-                // sobre apps en fullscreen. En otras plataformas, set_visible_on_all_workspaces
-                // es suficiente.
+                // Floating window: convert to NSPanel (macOS) to float above fullscreen apps.
+                // On other platforms, set_visible_on_all_workspaces is sufficient.
                 if let Some(w) = app.get_webview_window("monitor") {
                     // macOS: convert to NSPanel — required to float above fullscreen Spaces.
                     // The panel setup handles collectionBehavior + level internally.
@@ -66,17 +65,17 @@ fn main() {
                     let _ = w.set_visible_on_all_workspaces(true);
                 }
 
-                // Servidor de hooks (vive en una task de tokio).
+                // Hook server (runs in a tokio task).
                 let app_state = server::AppState {
                     store: store.clone(),
                     app: handle.clone(),
                 };
                 tauri::async_runtime::spawn(server::serve(app_state));
 
-                // Watcher de ficheros del supervisor (~/.claude/jobs/).
+                // Supervisor file watcher (~/.claude/jobs/).
                 jobs::start(store.clone(), handle.clone());
 
-                // Reaper de sesiones muertas.
+                // Dead-session reaper.
                 let reaper_store = store.clone();
                 let reaper_handle = handle.clone();
                 tauri::async_runtime::spawn(async move {
@@ -89,18 +88,18 @@ fn main() {
                     }
                 });
 
-                // Bandeja.
+                // Tray.
                 tray::build(&handle)?;
 
                 Ok(())
             }
         })
-        // Comandos para que el frontend pida el snapshot y las prefs al montar.
+        // Commands the frontend uses to fetch the snapshot and prefs on mount.
         .invoke_handler(tauri::generate_handler![get_instances, get_prefs])
         .build(tauri::generate_context!())
-        .expect("error al construir la app Tauri")
+        .expect("error building the Tauri app")
         .run(|_app, event| {
-            // Mantener la app viva en bandeja aunque se cierre la ventana.
+            // Keep the app alive in the tray even when the window is closed.
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 api.prevent_exit();
             }

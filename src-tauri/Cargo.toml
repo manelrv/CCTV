@@ -15,9 +15,9 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 axum = "0.7"
 sys-locale = "0.3"
-# Watcher de ficheros del supervisor (Fuente A — docs/DATA-SOURCES.md).
+# Supervisor file watcher (Source A — docs/DATA-SOURCES.md).
 notify = "6"
-# Resolucion del directorio home para ~/.claude/jobs/.
+# Home directory resolution for ~/.claude/jobs/.
 dirs = "5"
 
 tauri-plugin-autostart = "2"

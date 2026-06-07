@@ -1,9 +1,9 @@
-//! Diccionario estático de cadenas UI para el menú de bandeja.
-//! No se necesita lógica de plural en este lado (solo items de menú).
+//! Static dictionary of UI strings for the tray menu.
+//! No plural logic is needed here (only menu items).
 
 use sys_locale::get_locale;
 
-/// Idiomas soportados. Cae a inglés si el locale del sistema no está en la lista.
+/// Supported languages. Falls back to English if the system locale is not in the list.
 #[derive(Clone, Copy)]
 pub enum Lang {
     En,
@@ -17,10 +17,10 @@ pub enum Lang {
 }
 
 impl Lang {
-    /// Detecta el idioma del sistema a partir del locale, descarta la región.
+    /// Detects the system language from the locale, discarding the region.
     pub fn detect() -> Self {
         let locale = get_locale().unwrap_or_default();
-        // Toma solo el subtag de idioma (e.g. "es-ES" → "es").
+        // Take only the language subtag (e.g. "es-ES" → "es").
         let lang = locale.split(['-', '_']).next().unwrap_or("").to_lowercase();
         match lang.as_str() {
             "es" => Lang::Es,
@@ -110,7 +110,7 @@ pub fn strings(lang: Lang) -> TrayStrings {
             open_at_login: "Открывать при входе",
             quit: "Выйти",
         },
-        // Inglés es el fallback.
+        // English is the fallback.
         Lang::En => TrayStrings {
             show_window: "Show window",
             floating_window: "Floating window",
