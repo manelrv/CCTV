@@ -132,6 +132,19 @@ Chronological log of work completed. Format: date + phase + concise bullets.
 - Crash diagnosed via `~/Library/Logs/DiagnosticReports/*.ips`
   (exit 133 = SIGTRAP; faultingThread showed apply_auto_hide → orderOut).
 
+### TTL filter for finished background jobs
+
+- Discovery: the supervisor NEVER deletes the state.json of finished jobs —
+  the design assumption "background is cleaned by the supervisor file
+  lifecycle" was wrong, so finished jobs accumulated in the window forever.
+- Fix in two pieces (one alone is not enough):
+  - `jobs::scan()` skips terminal jobs (done/stopped/failed) older than
+    `REMOVE_SECS` — prevents loading/re-inserting fossils on disk events.
+  - `reap()` also expires terminal background instances by the same TTL —
+    covers time passing without any filesystem event.
+- Recent completions stay visible (useful feedback); 4 new tests (19 total).
+- Verified live: store went from 8 instances (7 fossils) to the 2 real ones.
+
 ---
 
-_Final verification: `cargo check` 0 errors · `cargo test` 15/15 · `tsc --noEmit` 0 errors · `npm run build` clean. Float over fullscreen verified live._
+_Final verification: `cargo check` 0 errors · `cargo test` 19/19 · `tsc --noEmit` 0 errors · `npm run build` clean. Float over fullscreen verified live._

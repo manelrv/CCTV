@@ -74,9 +74,13 @@ loses its terminal and is handed off to the supervisor). Implementation:
   rescan and calls `set_background_snapshot(...)`: replaces all `background`
   entries and removes any `foreground` entry that shares an `id`.
 - Source B hooks call `apply(...)` with `source = foreground`.
-- The **TTL reaper** only applies to `foreground` entries (foreground sessions
-  can die without a `SessionEnd`). `background` entries are cleaned up by the
-  supervisor files lifecycle.
+- The **TTL reaper** applies to `foreground` entries (foreground sessions can
+  die without a `SessionEnd`) and, as the single exception for `background`,
+  to background jobs in a **terminal state** (`done`/`stopped`/`failed`):
+  verified empirically, the supervisor NEVER deletes the `state.json` of
+  finished jobs, so without a TTL they would accumulate forever. Both
+  `jobs::scan()` (skip on read) and `reap()` (expire over time) apply the
+  same `REMOVE_SECS` threshold. Active background jobs are never reaped.
 
 ## UI
 

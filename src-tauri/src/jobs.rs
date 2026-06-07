@@ -193,11 +193,21 @@ fn scan() -> Vec<Instance> {
             .and_then(parse_rfc3339)
             .unwrap_or(file_ts);
 
+        let state = map_state(&raw_state, &raw_tempo);
+
+        // TTL filter: the supervisor never deletes the state.json of finished
+        // jobs, so terminal jobs (done/stopped/failed) older than REMOVE_SECS
+        // are skipped to keep the list from accumulating fossils. Recent
+        // completions stay visible — that feedback is useful.
+        if expired_terminal(state, last_event_at, now_secs()) {
+            continue;
+        }
+
         out.push(Instance {
             session_id: id,
             project: project_from_cwd(&cwd),
             cwd,
-            state: map_state(&raw_state, &raw_tempo),
+            state,
             detail,
             source: Source::Background,
             started_at,
@@ -205,6 +215,16 @@ fn scan() -> Vec<Instance> {
         });
     }
     out
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
+/// True if the job is in a terminal state and its last update is older than
+/// the removal TTL. Pure logic — unit-testable.
+fn expired_terminal(state: InstanceState, last_event_at: u64, now: u64) -> bool {
+    state.is_terminal() && now.saturating_sub(last_event_at) > crate::state::REMOVE_SECS
 }
 
 fn mtime(p: &PathBuf) -> u64 {
@@ -256,4 +276,31 @@ pub fn start(store: Arc<Store>, app: AppHandle) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::REMOVE_SECS;
+
+    #[test]
+    fn expired_terminal_filters_old_finished_jobs() {
+        let now = 100_000;
+        let old = now - REMOVE_SECS - 1;
+        assert!(expired_terminal(InstanceState::Completed, old, now));
+        assert!(expired_terminal(InstanceState::Error, old, now));
+        assert!(expired_terminal(InstanceState::Unknown, old, now));
+    }
+
+    #[test]
+    fn expired_terminal_keeps_recent_and_active_jobs() {
+        let now = 100_000;
+        let recent = now - 60;
+        let old = now - REMOVE_SECS - 1;
+        // Recent terminal: visible (useful feedback).
+        assert!(!expired_terminal(InstanceState::Completed, recent, now));
+        // Old but active: never filtered, the supervisor still owns it.
+        assert!(!expired_terminal(InstanceState::Working, old, now));
+        assert!(!expired_terminal(InstanceState::WaitingInput, old, now));
+    }
 }

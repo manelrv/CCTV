@@ -50,6 +50,15 @@ impl InstanceState {
     pub fn needs_attention(self) -> bool {
         matches!(self, InstanceState::WaitingPermission | InstanceState::WaitingInput)
     }
+    /// Terminal states: the session finished and will not transition again.
+    /// For background jobs the supervisor never deletes their state.json, so
+    /// terminal instances are expired by TTL instead (see reap and jobs::scan).
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            InstanceState::Completed | InstanceState::Error | InstanceState::Unknown
+        )
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -165,19 +174,24 @@ impl Store {
     }
 
     /// Transitions stale Working entries to Unknown and removes very old ones.
-    /// Only acts on Foreground instances: Background instances are managed by the
-    /// supervisor file lifecycle. See docs/DATA-SOURCES.md.
+    /// Active Background instances are managed by the supervisor file lifecycle
+    /// and never reaped — with ONE exception: the supervisor never deletes the
+    /// state.json of finished jobs, so TERMINAL background instances expire by
+    /// TTL here (jobs::scan applies the same filter on re-scan).
     /// Returns true if anything changed (so the caller emits a snapshot only when needed).
     pub fn reap(&self) -> bool {
         let mut map = self.inner.lock().unwrap();
         let ts = now();
         let mut changed = false;
 
-        // Remove very old foreground entries.
+        // Remove very old foreground entries, and expired terminal background ones.
         map.retain(|_, inst| {
-            if inst.source == Source::Foreground
-                && ts.saturating_sub(inst.last_event_at) > REMOVE_SECS
-            {
+            let age = ts.saturating_sub(inst.last_event_at);
+            let expired_fg = inst.source == Source::Foreground && age > REMOVE_SECS;
+            let expired_terminal_bg = inst.source == Source::Background
+                && inst.state.is_terminal()
+                && age > REMOVE_SECS;
+            if expired_fg || expired_terminal_bg {
                 changed = true;
                 return false;
             }
@@ -266,11 +280,29 @@ mod tests {
     }
 
     #[test]
-    fn reap_never_touches_background() {
+    fn reap_never_touches_nonterminal_background() {
         let store = Store::default();
         insert(&store, mk("bg", Source::Background, InstanceState::Working, REMOVE_SECS + 999));
         assert!(!store.reap());
         assert_eq!(get_state(&store, "bg"), Some(InstanceState::Working));
+    }
+
+    #[test]
+    fn reap_removes_expired_terminal_background() {
+        let store = Store::default();
+        insert(&store, mk("done", Source::Background, InstanceState::Completed, REMOVE_SECS + 20));
+        insert(&store, mk("fail", Source::Background, InstanceState::Error, REMOVE_SECS + 20));
+        insert(&store, mk("stop", Source::Background, InstanceState::Unknown, REMOVE_SECS + 20));
+        assert!(store.reap());
+        assert_eq!(store.snapshot().len(), 0);
+    }
+
+    #[test]
+    fn reap_keeps_fresh_terminal_background() {
+        let store = Store::default();
+        insert(&store, mk("done", Source::Background, InstanceState::Completed, 60));
+        assert!(!store.reap());
+        assert_eq!(get_state(&store, "done"), Some(InstanceState::Completed));
     }
 
     #[test]
