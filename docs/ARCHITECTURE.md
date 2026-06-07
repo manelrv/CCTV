@@ -126,9 +126,9 @@ plataforma no-macOS), hacen fallback a `get_webview_window`.
 - **Wayland:** el always-on-top no lo controla la app sino el compositor. En
   **Hyprland** se resuelve con reglas (ajusta `class`/`title` a los reales):
   ```
-  windowrulev2 = float, class:^(claude-code-monitor)$
-  windowrulev2 = pin, class:^(claude-code-monitor)$
-  windowrulev2 = nofocus, class:^(claude-code-monitor)$
+  windowrulev2 = float, class:^(cctv)$
+  windowrulev2 = pin, class:^(cctv)$
+  windowrulev2 = nofocus, class:^(cctv)$
   ```
   > TODO(claude-code): documentar la `class` real que reporta la ventana en
   > Wayland y dejar el snippet listo en el README.

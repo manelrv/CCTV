@@ -1,5 +1,5 @@
 [package]
-name = "claude-code-monitor"
+name = "cctv"
 version = "0.1.0"
 description = "Monitor de instancias de Claude Code"
 authors = ["Manel"]

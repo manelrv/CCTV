@@ -1,18 +1,24 @@
-# Claude Code Monitor
+# CCTV
 
-Ventana flotante *always-on-top* + icono de bandeja que muestra el estado de
-**todas las instancias de Claude Code** corriendo en la máquina: si están
-trabajando, esperando que apruebes algo, esperando input, o terminadas.
+**C**laude **C**ode **T**ele**v**isió — ventana flotante *always-on-top* +
+icono de bandeja que muestra el estado de **todas las instancias de Claude
+Code** corriendo en la máquina: si están trabajando, esperando que apruebes
+algo, esperando input, terminadas o con error.
 
 ![estados](docs/states.png)
-<!-- TODO(claude-code): añadir captura cuando la UI funcione -->
+<!-- TODO(claude-code): añadir captura actualizada de la UI -->
 
 ## Cómo funciona
 
-Claude Code dispara *hooks* HTTP que hacen POST a un servidor local que vive
-dentro de esta app. La app mantiene una máquina de estados por sesión y la pinta
-en la ventana. Detalle completo en [`CLAUDE.md`](CLAUDE.md) y
-[`docs/`](docs/).
+El estado llega de **dos fuentes** que se fusionan en un único store:
+
+- **Segundo plano** (`claude --bg`, Agent View): un *file watcher* lee los
+  `state.json` que el supervisor de Claude Code persiste en `~/.claude/jobs/`.
+- **Primer plano** (sesiones de terminal): *hooks* HTTP que hacen POST a un
+  servidor local que vive dentro de esta app.
+
+Detalle completo en [`CLAUDE.md`](CLAUDE.md), [`docs/DATA-SOURCES.md`](docs/DATA-SOURCES.md)
+y [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Requisitos
 
@@ -23,26 +29,23 @@ en la ventana. Detalle completo en [`CLAUDE.md`](CLAUDE.md) y
 
 ```bash
 npm install
-
-# Iconos (necesarios para compilar). Genera desde un PNG cuadrado:
-npm run tauri icon ruta/a/un-icono-1024.png
-
 npm run tauri dev
 ```
 
-## Conectar los hooks
+## Conectar los hooks (primer plano)
 
 Fusiona la clave `hooks` de [`hooks/settings.snippet.json`](hooks/settings.snippet.json)
 dentro de tu `~/.claude/settings.json`. Dentro de Claude Code, `/hooks` debe
 listarlos con fuente `User`. A partir de ahí, cada sesión que abras aparece en
-la ventana.
+la ventana. Las sesiones en segundo plano no necesitan configuración.
 
 ## Estado del proyecto
 
-Scaffold inicial pensado para que **Claude Code continúe el desarrollo**.
-El núcleo (tipos de hooks, servidor, máquina de estados, reaper, bandeja, UI)
-está esbozado pero **sin compilar todavía**. Empieza por
-[`docs/ROADMAP.md`](docs/ROADMAP.md) fase 0.
+Funcional en macOS: fuente híbrida, máquina de estados verificada con sesiones
+reales, reaper TTL, bandeja con icono dinámico y preferencias, i18n (8 idiomas)
+y float sobre apps en fullscreen (NSPanel). Pendiente: Linux/Wayland, Windows y
+empaquetado. Historial en [`WORKLOG.md`](WORKLOG.md) y estado por fases en
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Plataformas
 
