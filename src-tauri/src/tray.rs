@@ -78,6 +78,10 @@ fn handle_menu(app: &AppHandle, id: &str) {
 
         "toggle_on_top" => {
             prefs.always_on_top = !prefs.always_on_top;
+            // On macOS the panel's level is fixed at NSStatus (25) by setup_panel()
+            // and is managed by the NSPanel subclass — set_always_on_top is a no-op
+            // for the fullscreen guarantee. On other platforms it works normally.
+            #[cfg(not(target_os = "macos"))]
             if let Some(w) = app.get_webview_window("monitor") {
                 let _ = w.set_always_on_top(prefs.always_on_top);
             }
@@ -126,12 +130,7 @@ fn persist_and_sync(app: &AppHandle, prefs: &config::Prefs) {
 }
 
 fn toggle_window(app: &AppHandle, show: bool) {
-    if let Some(w) = app.get_webview_window("monitor") {
-        if show {
-            let _ = w.show();
-            let _ = w.set_focus();
-        } else {
-            let _ = w.hide();
-        }
-    }
+    // Delega en el helper thread-safe: las operaciones del NSPanel solo pueden
+    // ejecutarse en el main thread (ver refresh::set_panel_visible).
+    refresh::set_panel_visible(app, show);
 }

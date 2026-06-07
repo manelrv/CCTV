@@ -80,7 +80,17 @@ Marca `[x]` lo hecho. Cada fase debería dejar la app en un estado arrancable.
 - [x] 4 tests nuevos en `refresh.rs` (tray_variant + Prefs serde). Total: 15.
 
 ## Fase 5 — Pulido por plataforma
-- [ ] macOS: flotar sobre fullscreen (NSWindow level si hace falta).
+- [x] macOS: flotar sobre fullscreen. Integración de `tauri-nspanel` (branch
+      `v2.1`, commit `a3122e89`). `macos.rs` convierte el `WebviewWindow` en un
+      `NSPanel` subclass vía `to_panel::<MonitorPanel>()` y lo configura con:
+      - `StyleMask::empty().nonactivating_panel()` — no roba foco.
+      - `PanelLevel::Status` (25) — penetra el Space de fullscreen.
+      - `CollectionBehavior::can_join_all_spaces + full_screen_auxiliary + stationary`.
+      El enfoque NSWindow+FullScreenAuxiliary+level 101 fue descartado tras
+      verificación empírica: la ventana desaparece igualmente al entrar en
+      fullscreen aunque los bits estén correctamente aplicados (confirmado por
+      logs). NSPanel es requerido por macOS para esta garantía.
+      Verificación manual pendiente (requiere GUI fullscreen).
 - [ ] Linux/Wayland: regla de Hyprland documentada y `class` real verificada.
 - [ ] Windows: build y prueba.
 - [ ] Empaquetado: `.dmg` / `.AppImage`+`.deb` / `.msi`.

@@ -117,6 +117,24 @@ Registro cronológico del trabajo realizado. Formato: fecha + fase + bullets con
   autostart es `autolaunch()`; rutas de `include_bytes!` desde `src/` son
   `../../icons/`.
 
+### Fase 5 — Float sobre fullscreen en macOS
+
+- Receta final (las TRES piezas son necesarias):
+  1. **NSPanel** vía plugin `tauri-nspanel` (branch v2.1): un NSWindow normal
+     de Tauri NO entra al Space de fullscreen aunque tenga collectionBehavior
+     0x101 (AllSpaces|FullScreenAuxiliary) y level 101 — verificado
+     empíricamente con logs. macOS lo limita a subclases de NSPanel
+     (no documentado por Apple).
+  2. **ActivationPolicy::Accessory** — utilidad de menubar, sin icono en Dock.
+  3. **Main-thread dispatch**: el handle crudo del panel hace msg_send directo;
+     llamar show()/hide() desde hilos de tokio/watcher/reaper aborta con
+     SIGTRAP. Las APIs de Tauri redespachan internamente; el panel NO.
+     Solución: `refresh::set_panel_visible()` con `run_on_main_thread` y el
+     panel resuelto dentro del closure.
+- Panel no-activante: clickar el monitor no roba el foco a la app activa.
+- Crash diagnosticado vía `~/Library/Logs/DiagnosticReports/*.ips`
+  (exit 133 = SIGTRAP; el faultingThread mostró apply_auto_hide → orderOut).
+
 ---
 
-_Verificación final: `cargo check` 0 errores · `cargo test` 15/15 · `tsc --noEmit` 0 errores · `npm run build` clean._
+_Verificación final: `cargo check` 0 errores · `cargo test` 15/15 · `tsc --noEmit` 0 errores · `npm run build` clean. Float sobre fullscreen verificado en vivo._

@@ -79,13 +79,46 @@ pub fn apply_auto_hide(app: &AppHandle, prefs: &Prefs, attention: usize) {
     if !prefs.auto_hide {
         return;
     }
+    if attention > 0 && prefs.floating_window {
+        set_panel_visible(app, true);
+    } else if attention == 0 {
+        set_panel_visible(app, false);
+    }
+}
+
+/// Muestra/oculta el panel (macOS) o la ventana (otros SO).
+///
+/// OJO threading: refresh() corre desde hilos de tokio (hooks), del watcher de
+/// jobs y del reaper. Las APIs de ventana de Tauri redespachan al main thread
+/// internamente, pero el handle crudo del NSPanel NO — llamar a orderOut/show
+/// desde otro hilo aborta con SIGTRAP en AppKit. Por eso todo pasa por
+/// run_on_main_thread y el panel se resuelve DENTRO del closure.
+pub fn set_panel_visible(app: &AppHandle, visible: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            use tauri_nspanel::ManagerExt;
+            if let Ok(panel) = app2.get_webview_panel("monitor") {
+                if visible {
+                    panel.show();
+                } else {
+                    panel.hide();
+                }
+                return;
+            }
+            // Fallback si el panel aun no esta convertido.
+            if let Some(w) = app2.get_webview_window("monitor") {
+                let _ = if visible { w.show() } else { w.hide() };
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Some(w) = app.get_webview_window("monitor") {
-        if attention > 0 && prefs.floating_window {
-            // Hay instancias que reclaman atencion: mostrar ventana.
+        if visible {
             let _ = w.show();
             let _ = w.set_focus();
-        } else if attention == 0 {
-            // Nada reclama: ocultar ventana.
+        } else {
             let _ = w.hide();
         }
     }

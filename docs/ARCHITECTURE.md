@@ -82,14 +82,43 @@ En runtime (setup de `main.rs`):
 - `set_visible_on_all_workspaces(true)` para que siga visible al cambiar de
   espacio.
 
-### macOS
+### macOS — Por qué NSPanel es obligatorio
 
-- Para que flote **sobre apps en fullscreen** puede no bastar `always_on_top`;
-  hace falta subir el nivel de ventana (`NSWindow` level a `floating` o
-  `screenSaver`) y el collection behavior.
-  > TODO(claude-code): si `set_visible_on_all_workspaces` no cubre el caso
-  > fullscreen, implementar vía `objc2`/`cocoa` sobre el `NSWindow` nativo
-  > (`ns_window()` del `WebviewWindow`).
+Para flotar **sobre apps en fullscreen**, un `NSWindow` ordinario es insuficiente
+aunque se apliquen todos los bits correctos:
+
+- `collectionBehavior = CanJoinAllSpaces | FullScreenAuxiliary` (0x101)
+- `level = NSPopUpMenuWindowLevel` (101)
+- `ActivationPolicy::Accessory`
+
+Todo esto fue verificado empíricamente (confirmado via logs de la app). Aun así,
+la ventana desaparecía al entrar otra app en fullscreen. La causa: macOS
+internamente requiere que la ventana sea una subclase de **NSPanel** para
+respetar `FullScreenAuxiliary` en el Space de fullscreen de otra app.
+
+**Solución:** plugin `tauri-nspanel` (branch `v2.1`) que convierte el
+`WebviewWindow` en un `NSPanel` subclass real. En `setup()` se llama
+`macos::setup_panel(&w)` (`src/macos.rs`) que:
+
+1. Convierte la ventana: `window.to_panel::<MonitorPanel>()` (trait
+   `WebviewWindowExt` del plugin). El panel queda registrado en el
+   `WebviewPanelManager` del plugin y es recuperable con
+   `app.get_webview_panel("monitor")`.
+2. Estilo no-activating: `StyleMask::empty().nonactivating_panel()` — el panel
+   no roba el foco de la app activa (incluso en fullscreen).
+3. Nivel `PanelLevel::Status` (25) — mismo nivel que los indicadores de la
+   barra de estado del sistema.
+4. `CollectionBehavior`: `can_join_all_spaces() + full_screen_auxiliary() +
+   stationary()` — visible en todos los Spaces, admitido en fullscreen Spaces,
+   no se mueve con Exposé.
+
+El plugin usa las mismas versiones de `objc2`/`objc2-app-kit`/`objc2-foundation`
+que Tauri trae como dependencias transitivas — sin duplicado en el binario.
+
+`tray.rs` y `refresh.rs` llaman a `app.get_webview_panel("monitor")` para
+mostrar/ocultar el panel (en lugar de `get_webview_window`), usando el trait
+`tauri_nspanel::ManagerExt`. Si el panel no está disponible (race en init o
+plataforma no-macOS), hacen fallback a `get_webview_window`.
 
 ### Linux / Wayland
 

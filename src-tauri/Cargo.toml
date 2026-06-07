@@ -21,3 +21,11 @@ notify = "6"
 dirs = "5"
 
 tauri-plugin-autostart = "2"
+
+# NSPanel plugin: converts the monitor window into an NSPanel subclass so it
+# can float above fullscreen spaces. Plain NSWindow + FullScreenAuxiliary +
+# high level was empirically proven insufficient on macOS (window disappears
+# when another app enters fullscreen even with collectionBehavior 0x101 and
+# level 101 correctly applied). NSPanel subclass is required.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }

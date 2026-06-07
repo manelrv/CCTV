@@ -5,6 +5,8 @@ mod config;
 mod hooks;
 mod i18n;
 mod jobs;
+#[cfg(target_os = "macos")]
+mod macos;
 mod refresh;
 mod server;
 mod state;
@@ -25,11 +27,18 @@ fn main() {
     };
     let prefs_state = refresh::PrefsState(std::sync::Mutex::new(initial_prefs));
 
-    tauri::Builder::default()
+    // Build the plugin chain. tauri-nspanel must be registered before setup()
+    // so its WebviewPanelManager is available when to_panel() is called.
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
-        ))
+        ));
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+
+    builder
         .manage(store.clone())
         .manage(prefs_state)
         .setup({
@@ -37,11 +46,23 @@ fn main() {
             move |app| {
                 let handle = app.handle().clone();
 
-                // Ventana flotante: arranca oculta, visible en todos los espacios.
+                // En macOS la app debe ser Accessory (utilidad de menubar, sin
+                // icono en el Dock): una app Regular no puede meter ventanas en
+                // el Space fullscreen de otra app por alto que sea su level.
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+                // Ventana flotante: convierte a NSPanel (macOS) para poder flotar
+                // sobre apps en fullscreen. En otras plataformas, set_visible_on_all_workspaces
+                // es suficiente.
                 if let Some(w) = app.get_webview_window("monitor") {
-                    // TODO(claude-code): en macOS, para flotar sobre apps en
-                    // fullscreen puede hacer falta subir el NSWindow level via
-                    // objc2/cocoa. Ver docs/ARCHITECTURE.md#macos.
+                    // macOS: convert to NSPanel — required to float above fullscreen Spaces.
+                    // The panel setup handles collectionBehavior + level internally.
+                    // set_visible_on_all_workspaces is a no-op after panel conversion on macOS
+                    // (the panel's own collectionBehavior takes precedence), but harmless.
+                    #[cfg(target_os = "macos")]
+                    macos::setup_panel(&w);
+                    #[cfg(not(target_os = "macos"))]
                     let _ = w.set_visible_on_all_workspaces(true);
                 }
 
