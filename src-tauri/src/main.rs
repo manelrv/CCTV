@@ -31,6 +31,7 @@ fn main() {
     // Build the plugin chain. tauri-nspanel must be registered before setup()
     // so its WebviewPanelManager is available when to_panel() is called.
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -105,8 +106,10 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error building the Tauri app")
         .run(|_app, event| {
-            // Keep the app alive in the tray even when the window is closed.
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            // Keep the app alive in the tray when windows close (code: None),
+            // but let explicit exits through — the tray Quit item calls
+            // app.exit(0), which arrives here with code: Some(0).
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
                 api.prevent_exit();
             }
         });

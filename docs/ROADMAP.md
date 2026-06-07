@@ -110,8 +110,14 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
       i18n: `notif_permission` / `notif_input` in all 8 languages.
       4 new tests (34 total).
 
+## Extras (continued)
+- [x] Click-to-copy row: clicking a row copies a useful payload to the clipboard.
+      Background (`bg`): `claude attach <shortId>` (first UUID segment of session_id).
+      Foreground (`fg`): the instance `cwd`. Visual feedback: state label swaps to
+      localized "Copied" for 1.2 s then reverts. Uses `tauri-plugin-clipboard-manager`
+      (avoids `navigator.clipboard` which is flaky in WKWebView). i18n in all 8 languages.
+
 ## Ideas / backlog
-- Click on a row → bring that terminal to the foreground (difficult cross-platform) or
-  copy the `cwd`.
+- Click on a row → bring that terminal to the foreground (difficult cross-platform).
 - Session time history (SQLite) for metrics.
 - Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.

@@ -18,6 +18,8 @@ const de = {
     attention_other: "{{count}} erfordern Aufmerksamkeit",
   },
 
+  copied: "Kopiert",
+
   empty: "Keine aktiven Instanzen",
 } as const;
 

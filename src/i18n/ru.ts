@@ -26,6 +26,8 @@ const ru = {
     attention_other: "{{count}} требуют внимания",
   },
 
+  copied: "Скопировано",
+
   empty: "Нет активных экземпляров",
 } as const;
 

@@ -18,6 +18,8 @@ const es = {
     attention_other: "{{count}} requieren atención",
   },
 
+  copied: "Copiado",
+
   empty: "Sin instancias activas",
 } as const;
 

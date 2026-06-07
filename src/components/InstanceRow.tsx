@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Instance } from "../types";
-import { STATE_CLASS, STATE_I18N_KEY, formatTokens } from "../types";
+import { STATE_CLASS, STATE_I18N_KEY, copyPayload, formatTokens } from "../types";
 
 function timeInState(lastEventAt: number, now: number): string {
   const secs = Math.max(0, now - lastEventAt);
@@ -17,8 +19,18 @@ function timeInState(lastEventAt: number, now: number): string {
 export function InstanceRow({ inst, now }: { inst: Instance; now: number }) {
   const { t } = useTranslation();
   const cls = STATE_CLASS[inst.state];
+  const [copied, setCopied] = useState(false);
+
+  function handleClick() {
+    const payload = copyPayload(inst);
+    writeText(payload).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }
+
   return (
-    <div className={`row ${cls}`}>
+    <div className={`row ${cls}`} onClick={handleClick} style={{ cursor: "pointer" }}>
       <span className="dot" aria-hidden />
       <div className="row-main">
         <div className="project">
@@ -28,7 +40,7 @@ export function InstanceRow({ inst, now }: { inst: Instance; now: number }) {
         {inst.detail && <div className="detail">{inst.detail}</div>}
       </div>
       <div className="row-meta">
-        <div className="state">{t(STATE_I18N_KEY[inst.state])}</div>
+        <div className="state">{copied ? t("copied") : t(STATE_I18N_KEY[inst.state])}</div>
         <div className="time-tokens">
           <span className="time">{timeInState(inst.last_event_at, now)}</span>
           {inst.context_tokens != null && (

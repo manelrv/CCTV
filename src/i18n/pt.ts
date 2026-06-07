@@ -18,6 +18,8 @@ const pt = {
     attention_other: "{{count}} requerem atenção",
   },
 
+  copied: "Copiado",
+
   empty: "Sem instâncias ativas",
 } as const;
 

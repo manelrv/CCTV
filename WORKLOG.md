@@ -216,6 +216,30 @@ Chronological log of work completed. Format: date + phase + concise bullets.
 
 - Times ≥60 min render as "17h 18m" instead of unreadable "1038:19" (`InstanceRow`).
 
+### Click-to-copy row
+
+- **What**: Clicking any instance row copies a useful payload to the clipboard and shows
+  a brief "Copied" confirmation in the state label area for 1.2 s before reverting.
+  - Background rows (`source === "background"`): copies `claude attach <shortId>` where
+    `shortId` is the first UUID segment of `session_id` (verified: equals `daemonShort`).
+  - Foreground rows: copies the instance `cwd`.
+- **Plugin**: `tauri-plugin-clipboard-manager = "2"` (Rust) + `@tauri-apps/plugin-clipboard-manager`
+  (npm). Registered via `tauri_plugin_clipboard_manager::init()` in `main.rs`.
+  Capability: `"clipboard-manager:allow-write-text"` in `capabilities/default.json`.
+  Uses `writeText()` from the plugin — NOT `navigator.clipboard` (flaky in WKWebView).
+- **Pure helper**: `copyPayload(inst: Instance): string` added to `types.ts` — trivially
+  testable without a JS test runner.
+- **i18n**: `copied` key added to all 8 locale files:
+  en "Copied" · es "Copiado" · pt "Copiado" · de "Kopiert" · fr "Copié" ·
+  it "Copiato" · ca "Copiat" · ru "Скопировано".
+- **InstanceRow.tsx**: `onClick` handler, `copied` boolean state (useState), cursor pointer
+  via inline style, `t("copied")` replaces the state label during the 1.2 s window.
+- **NSPanel note**: the monitor is a non-activating NSPanel — clicking does not steal focus
+  from the active app, but mouse events do reach the webview, so click-to-copy works
+  correctly. Requires manual verification.
+- **Verification**: `tsc --noEmit` 0 errors · `npm run build` clean · `cargo check` 0 errors
+  · `cargo test` 34/34 (no new Rust code, test count unchanged).
+
 ---
 
 _Final verification: `cargo check` 0 errors · `cargo test` 34/34 · `tsc --noEmit` 0 errors · `npm run build` clean._

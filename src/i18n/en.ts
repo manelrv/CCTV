@@ -20,6 +20,9 @@ const en = {
     attention_other: "{{count}} need attention",
   },
 
+  // Click-to-copy feedback
+  copied: "Copied",
+
   // Empty state
   empty: "No active instances",
 } as const;

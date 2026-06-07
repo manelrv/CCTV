@@ -18,6 +18,8 @@ const ca = {
     attention_other: "{{count}} requereixen atenció",
   },
 
+  copied: "Copiat",
+
   empty: "Sense instàncies actives",
 } as const;
 
