@@ -1,88 +1,89 @@
-# Fuentes de datos: híbrido (Agent View + hooks)
+# Data sources: hybrid (Agent View + hooks)
 
-El estado de las instancias viene de **dos sitios** y se fusiona en un único
-store. Esto es así porque ninguna fuente sola cubre todas las sesiones.
+Instance state comes from **two places** and is merged into a single
+store. This is necessary because neither source alone covers all sessions.
 
-## Por qué dos fuentes
+## Why two sources
 
-- **Sesiones en segundo plano** (lanzadas con `/bg`, `claude --bg`, o desde la
-  propia Agent View): las gestiona el **supervisor** de Claude Code, que ya
-  persiste su estado en disco. No necesitamos hooks para estas: leemos sus
-  ficheros.
-- **Sesiones en primer plano** (un `claude` normal en una terminal): NO las
-  gestiona el supervisor, así que no aparecen en sus ficheros. Para estas
-  seguimos usando los **hooks HTTP** (ver `docs/HOOKS.md`).
+- **Background sessions** (launched with `/bg`, `claude --bg`, or from
+  Agent View itself): managed by the Claude Code **supervisor**, which already
+  persists their state to disk. We don't need hooks for these: we read their
+  files.
+- **Foreground sessions** (a normal `claude` in a terminal): NOT managed by
+  the supervisor, so they don't appear in its files. For these we keep using
+  **HTTP hooks** (see `docs/HOOKS.md`).
 
-Un usuario que mezcla ambos flujos necesita las dos fuentes.
+A user mixing both workflows needs both sources.
 
-## Fuente A — ficheros del supervisor (segundo plano)
+## Source A — supervisor files (background)
 
-Agent View persiste el estado bajo el directorio de config de Claude Code:
+Agent View persists state under the Claude Code config directory:
 
-| Fichero                          | Contenido                                          |
-| -------------------------------- | -------------------------------------------------- |
-| `~/.claude/daemon/roster.json`   | Lista de sesiones en marcha (para reconectar)      |
-| `~/.claude/jobs/<id>/state.json` | Estado por sesión que alimenta la tabla de Agent View |
-| `~/.claude/daemon.log`           | Logs del supervisor                                |
+| File                             | Contents                                               |
+| -------------------------------- | ------------------------------------------------------ |
+| `~/.claude/daemon/roster.json`   | List of running sessions (for reconnecting)            |
+| `~/.claude/jobs/<id>/state.json` | Per-session state that feeds the Agent View table      |
+| `~/.claude/daemon.log`           | Supervisor logs                                        |
 
-La documentación dice explícitamente que **puedes leer esos ficheros desde un
-script para construir automatizaciones propias**. Eso es justo lo que hacemos:
-vigilamos `~/.claude/jobs/` (y `roster.json`) con un file watcher, parseamos los
-`state.json` y mapeamos su estado al nuestro. El supervisor ya hace la máquina
-de estados, las transiciones y la limpieza; nosotros solo leemos y pintamos.
+The documentation explicitly states that **you can read those files from a
+script to build your own automations**. That is exactly what we do:
+we watch `~/.claude/jobs/` (and `roster.json`) with a file watcher, parse the
+`state.json` files, and map their state to ours. The supervisor already handles
+the state machine, transitions, and cleanup; we just read and display.
 
-> TODO(claude-code): el esquema exacto de `state.json` NO está documentado campo
-> a campo. Antes de fijar los tipos en `jobs.rs`, abre un `state.json` real
-> (lanza una sesión con `claude --bg "echo hola"` y mira el fichero) y ajusta la
-> struct `JobState`. Parsea defensivo (todo `Option`).
-> `claude daemon status` (v2.1.141+) también vuelca estado del subsistema.
+> TODO(claude-code): the exact schema of `state.json` is NOT documented
+> field by field. Before fixing the types in `jobs.rs`, open a real
+> `state.json` (launch a session with `claude --bg "echo hello"` and inspect
+> the file) and adjust the `JobState` struct. Parse defensively (everything
+> as `Option`).
+> `claude daemon status` (v2.1.141+) also dumps subsystem state.
 
-### Estados de Agent View → los nuestros
+### Agent View states → ours
 
-Agent View expone: Working (animado), Needs input (amarillo), Idle (atenuado),
-Completed (verde), Failed (rojo), Stopped (gris).
+Agent View exposes: Working (animated), Needs input (yellow), Idle (dimmed),
+Completed (green), Failed (red), Stopped (gray).
 
-| Agent View   | InstanceState (nuestro) | Color   |
-| ------------ | ----------------------- | ------- |
-| Working      | `working`               | verde   |
-| Needs input  | `waiting_input`         | ámbar   |
-| (blocked)    | `waiting_permission`    | rojo    |
-| Idle         | `idle`                  | gris    |
-| Completed    | `completed`             | verde   |
-| Failed       | `error`                 | rojo    |
-| Stopped      | `unknown`               | gris    |
+| Agent View   | InstanceState (ours)    | Color  |
+| ------------ | ----------------------- | ------ |
+| Working      | `working`               | green  |
+| Needs input  | `waiting_input`         | amber  |
+| (blocked)    | `waiting_permission`    | red    |
+| Idle         | `idle`                  | gray   |
+| Completed    | `completed`             | green  |
+| Failed       | `error`                 | red    |
+| Stopped      | `unknown`               | gray   |
 
-> Nota: Agent View distingue "blocked" (filtro `s:blocked`). Si `state.json` lo
-> separa de "needs input", mapéalo a `waiting_permission`; si no, todo lo que
-> reclame input va a `waiting_input`.
+> Note: Agent View distinguishes "blocked" (filter `s:blocked`). If `state.json`
+> separates it from "needs input", map it to `waiting_permission`; otherwise,
+> everything that requests input goes to `waiting_input`.
 
-## Fuente B — hooks HTTP (primer plano)
+## Source B — HTTP hooks (foreground)
 
-Igual que en `docs/HOOKS.md`. Solo cambia que estas instancias se marcan con
-`source = "foreground"`.
+Same as in `docs/HOOKS.md`. The only difference is that these instances are
+marked with `source = "foreground"`.
 
-## Fusión en el store
+## Merging in the store
 
-Cada `Instance` lleva un campo `source`: `background` | `foreground`.
+Each `Instance` carries a `source` field: `background` | `foreground`.
 
-Regla: **background manda**. Una sesión vive en una fuente u otra, no en las dos
-a la vez (cuando mandas a segundo plano una sesión de primer plano, deja de
-tener terminal y pasa al supervisor). Implementación:
+Rule: **background wins**. A session lives in one source or the other, not in
+both at the same time (when a foreground session is sent to the background, it
+loses its terminal and is handed off to the supervisor). Implementation:
 
-- El watcher de la Fuente A produce el set completo de sesiones en segundo plano
-  en cada rescan y hace `set_background_snapshot(...)`: reemplaza todas las
-  entradas `background` y elimina cualquier `foreground` que comparta `id`.
-- Los hooks de la Fuente B hacen `apply(...)` con `source = foreground`.
-- El **reaper TTL** solo aplica a las `foreground` (las de primer plano pueden
-  morir sin `SessionEnd`). Las `background` las limpia el ciclo de vida de los
-  ficheros del supervisor.
+- The Source A watcher produces the complete set of background sessions on each
+  rescan and calls `set_background_snapshot(...)`: replaces all `background`
+  entries and removes any `foreground` entry that shares an `id`.
+- Source B hooks call `apply(...)` with `source = foreground`.
+- The **TTL reaper** only applies to `foreground` entries (foreground sessions
+  can die without a `SessionEnd`). `background` entries are cleaned up by the
+  supervisor files lifecycle.
 
 ## UI
 
-La fila muestra una etiqueta discreta del origen: `bg` / `fg`, para que de un
-vistazo sepas cuál puedes reabrir con `claude agents` y cuál vive en una
-terminal tuya.
+The row shows a discreet source label: `bg` / `fg`, so you can tell at a glance
+which ones you can reopen with `claude agents` and which ones live in a
+terminal of yours.
 
-> Backlog: Agent View también muestra un punto de color con el estado del PR que
-> abre una sesión (amarillo/verde/morado/gris). Si `state.json` lo incluye,
-> sería un extra bonito en la fila.
+> Backlog: Agent View also shows a color dot with the PR status opened by a
+> session (yellow/green/purple/gray). If `state.json` includes it,
+> it would be a nice extra on the row.

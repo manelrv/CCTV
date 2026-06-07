@@ -1,104 +1,102 @@
 # CLAUDE.md
 
-Contexto del proyecto para Claude Code. Léelo entero antes de tocar nada.
+Project context for Claude Code. Read this entirely before touching anything.
 
-## Qué es esto
+## What this is
 
-Una app de escritorio que **monitoriza todas las instancias de Claude Code que
-corren en la máquina** y muestra, en una ventana flotante *always-on-top* (más un
-icono en la bandeja del sistema), el estado de cada una: si está trabajando, si
-está esperando que el usuario apruebe algo, si espera input, o si ha terminado.
+A desktop app that **monitors all Claude Code instances running on the machine** and shows,
+in an always-on-top floating window (plus a system tray icon), the status of each one:
+whether it is working, waiting for the user to approve something, waiting for input, or done.
 
-El objetivo es no tener que ir mirando terminal por terminal para saber qué
-agente te reclama.
+The goal is to stop checking terminal after terminal to find out which agent needs attention.
 
-## Arquitectura en una frase
+## Architecture in one sentence
 
-El estado de las instancias llega de **dos fuentes**: sesiones en segundo plano
-se leen desde `~/.claude/jobs/` (file watcher), y sesiones en primer plano llegan
-por **hooks HTTP** desde `~/.claude/settings.json`. Ambas se fusionan en un único
-store que empuja snapshots a la ventana (webview) por eventos de Tauri.
+Instance state arrives from **two sources**: background sessions are read from
+`~/.claude/jobs/` (file watcher), and foreground sessions arrive via **HTTP hooks**
+from `~/.claude/settings.json`. Both are merged into a single store that pushes
+snapshots to the window (webview) via Tauri events.
 
 ```
-Claude Code — sesiones bg          Claude Code — sesiones fg
-  ~/.claude/jobs/<id>/state.json        hooks HTTP (POST localhost:8787)
+Claude Code — bg sessions          Claude Code — fg sessions
+  ~/.claude/jobs/<id>/state.json        HTTP hooks (POST localhost:8787)
         │  file watcher                       │
         ▼                                     ▼
-App Tauri (proceso siempre vivo en la bandeja)
-  ├── jobs.rs    → Fuente A: watcher + parse state.json (notify + dirs)
-  ├── server.rs  → Fuente B: recibe los hooks (axum)
-  ├── state.rs   → store híbrido + merge rule "background manda" + reaper TTL
-  ├── tray.rs    → icono + menú de preferencias
-  └── webview    → ventana flotante React (recibe snapshots por evento)
+Tauri app (process always alive in the system tray)
+  ├── jobs.rs    → Source A: watcher + parse state.json (notify + dirs)
+  ├── server.rs  → Source B: receives hooks (axum)
+  ├── state.rs   → hybrid store + merge rule "background wins" + reaper TTL
+  ├── tray.rs    → icon + preferences menu
+  └── webview    → React floating window (receives snapshots via event)
 ```
 
-Ver `docs/ARCHITECTURE.md` para el detalle, `docs/HOOKS.md` para el esquema de
-payloads y `docs/DATA-SOURCES.md` para la regla de fusión de fuentes.
+See `docs/ARCHITECTURE.md` for details, `docs/HOOKS.md` for the payload schema,
+and `docs/DATA-SOURCES.md` for the source merge rule.
 
 ## Stack
 
-- **Tauri 2** (Rust + webview). Elegido por footprint mínimo (la app está siempre
-  corriendo) y por soporte nativo de ventana sin marco, transparente,
-  always-on-top y bandeja. Si en algún momento se decide migrar a Electron, el
-  frontend React se reaprovecha tal cual.
-- **Backend:** Rust con `axum` (servidor HTTP de los hooks) + `tokio`.
-- **Frontend:** React + TypeScript + Vite. CSS plano (sin framework) en
+- **Tauri 2** (Rust + webview). Chosen for minimal footprint (the app is always
+  running) and native support for frameless, transparent, always-on-top windows
+  and system tray. If a migration to Electron is ever decided, the React frontend
+  can be reused as-is.
+- **Backend:** Rust with `axum` (HTTP server for hooks) + `tokio`.
+- **Frontend:** React + TypeScript + Vite. Plain CSS (no framework) in
   `src/styles.css`.
 
-## Plataformas (en orden de prioridad)
+## Platforms (in priority order)
 
-1. **macOS** — objetivo principal. Funciona todo directo.
-2. **Linux** — X11 directo. **Wayland: el always-on-top depende del compositor.**
-   Para Hyprland se resuelve con reglas del compositor, no con la API de ventana.
-   Ver `docs/ARCHITECTURE.md#linux--wayland`.
-3. **Windows** — sin fricción.
+1. **macOS** — primary target. Everything works out of the box.
+2. **Linux** — X11 works directly. **Wayland: always-on-top depends on the compositor.**
+   For Hyprland this is handled via compositor rules, not the window API.
+   See `docs/ARCHITECTURE.md#linux--wayland`.
+3. **Windows** — no friction.
 
-## Idiomas de la app
+## App languages
 
-La app debe ser **multilingüe**. Estos son los idiomas que deben estar presentes:
+The app must be **multilingual**. The following languages must be present:
 
-1. Inglés
-2. Español
-3. Portugués
-4. Alemán
-5. Francés
-6. Italiano
-7. Catalán
-8. Ruso
+1. English
+2. Spanish
+3. Portuguese
+4. German
+5. French
+6. Italian
+7. Catalan
+8. Russian
 
-Idiomo por defecto:
+Default language:
 
-1. Inglés
+1. English
 
-## Arquitectura de la app
+## App architecture
 
-El documento `docs/ARCHITECTURE.md` describe la arquitectura de la app. Mantenlo actualizado.
+The document `docs/ARCHITECTURE.md` describes the app architecture. Keep it up to date.
 
-## Reglas de trabajo
+## Working rules
 
-- Mantén `docs/ROADMAP.md` actualizado: marca lo hecho, añade lo que descubras.
-- El esquema de los hooks es la fuente de verdad: si algo no encaja con
-  `docs/HOOKS.md`, **verifica contra la doc oficial** antes de improvisar tipos.
-  Doc: https://code.claude.com/docs/en/hooks
-- No bloquees nunca a Claude Code: el endpoint HTTP debe responder `200` con
-  cuerpo vacío de inmediato. Toda la lógica va después de responder, o en otra
-  tarea. Un hook lento ralentiza la sesión del usuario.
-- Los `TODO(claude-code):` repartidos por el código marcan lo que falta por
-  implementar. Búscalos con grep.
+- Keep `docs/ROADMAP.md` updated: mark what is done, add whatever you discover.
+- The hook schema is the source of truth: if something does not match
+  `docs/HOOKS.md`, **verify against the official docs** before improvising types.
+  Docs: https://code.claude.com/docs/en/hooks
+- Never block Claude Code: the HTTP endpoint must respond `200` with an empty body
+  immediately. All logic goes after the response, or in a separate task. A slow
+  hook slows down the user's session.
+- `TODO(claude-code):` markers scattered through the code mark what remains to be
+  implemented. Find them with grep.
 
-## Cómo arrancar (dev)
+## How to start (dev)
 
 ```bash
 npm install
-npm run tauri dev      # levanta Vite + compila Rust + abre la app
+npm run tauri dev      # starts Vite + compiles Rust + opens the app
 ```
 
-Para que los hooks lleguen, hay que tener la config de `hooks/settings.snippet.json`
-fusionada en `~/.claude/settings.json` (ver `docs/HOOKS.md#instalación`).
+For hooks to reach the server, the config in `hooks/settings.snippet.json` must be
+merged into `~/.claude/settings.json` (see `docs/HOOKS.md#instalación`).
 
-## Estado actual
+## Current status
 
-Scaffold inicial. El núcleo (tipos de hooks, rutas del servidor, máquina de
-estados, reaper TTL, bandeja básica, ventana React con la UI) está esbozado y
-es coherente, pero **no se ha compilado ni probado todavía**. Primera tarea:
-hacer que `npm run tauri dev` compile y arranque. Ver `docs/ROADMAP.md` fase 0.
+Initial scaffold. The core (hook types, server routes, state machine, reaper TTL,
+basic system tray, React window with UI) is sketched out and coherent, but
+**has not been compiled or tested yet**. First task: get `npm run tauri dev` to
+compile and start. See `docs/ROADMAP.md` phase 0.

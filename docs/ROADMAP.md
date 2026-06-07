@@ -1,104 +1,103 @@
 # Roadmap
 
-Marca `[x]` lo hecho. Cada fase debería dejar la app en un estado arrancable.
+Mark `[x]` when done. Each phase should leave the app in a runnable state.
 
-## Fase 0 — Compila y arranca ✅
-- [x] `npm install` y `npm run tauri dev` compilan y abren una ventana.
-      (Arreglos: `[lib]` espurio en Cargo.toml, feature `macos-private-api`,
-      `.manage(store)` en main.rs, `server.rs` duplicado en la raíz eliminado.)
-- [x] Generar iconos (`npx tauri icon icons/icon-app-1024.png`). Fuentes en
-      `icons/` (app + tray calm/alert para fase 4).
-- [x] La ventana muestra datos *mock* con la UI de filas. Sembrados en el store
-      (`main.rs`, solo `debug_assertions`) — prueban el pipeline completo.
-      Quitar en fase 1 (marcado con TODO).
+## Phase 0 — Compiles and runs ✅
+- [x] `npm install` and `npm run tauri dev` compile and open a window.
+      (Fixes: spurious `[lib]` in Cargo.toml, `macos-private-api` feature,
+      `.manage(store)` in main.rs, duplicate `server.rs` at root removed.)
+- [x] Generate icons (`npx tauri icon icons/icon-app-1024.png`). Sources in
+      `icons/` (app + tray calm/alert for phase 4).
+- [x] The window shows *mock* data with the row UI. Seeded in the store
+      (`main.rs`, only under `debug_assertions`) — exercises the full pipeline.
+      Remove in phase 1 (marked with TODO).
 
-## Fase 1 — Recibir hooks de verdad ✅
-- [x] Servidor axum escuchando en `127.0.0.1:8787` (`/health` responde OK).
-- [x] Las 8 rutas de `docs/HOOKS.md` parsean el payload y responden `200` vacío.
-      (Las de `Notification` quedan por ejercitar con sesiones reales — fase 2.)
-- [x] Fusionar `hooks/settings.snippet.json` en `~/.claude/settings.json`.
-      Backup en `settings.json.bak-pre-cctv-hooks`; el hook previo de
-      `UserPromptSubmit` (gentle-ai) convive en el mismo array.
-- [x] Sesión real de Claude Code aparece en la ventana y cambia de estado.
-      Mocks de fase 0 eliminados de `main.rs`.
+## Phase 1 — Receive real hooks ✅
+- [x] axum server listening on `127.0.0.1:8787` (`/health` responds OK).
+- [x] All 8 routes from `docs/HOOKS.md` parse the payload and respond with an empty `200`.
+      (The `Notification` ones still need to be exercised with real sessions — phase 2.)
+- [x] Merge `hooks/settings.snippet.json` into `~/.claude/settings.json`.
+      Backup at `settings.json.bak-pre-cctv-hooks`; the previous
+      `UserPromptSubmit` hook (gentle-ai) coexists in the same array.
+- [x] A real Claude Code session appears in the window and changes state.
+      Phase 0 mocks removed from `main.rs`.
 
-## Fase 1b — Fuente híbrida (Agent View)
-- [x] Watcher de `~/.claude/jobs/` integrado (`jobs.rs`, crates `notify` + `dirs`).
-- [x] Esquema de `state.json` verificado empíricamente (sessionId camelCase,
-      detail/intent, createdAt/updatedAt RFC3339; campo `name` también presente).
-- [x] Regla "background manda" implementada en `set_background_snapshot()`.
-- [x] Reaper TTL acotado solo a instancias Foreground.
-- [x] Estados `Completed` y `Error` añadidos a `InstanceState` con urgency.
-- [x] Badge `bg`/`fg` discreto en cada fila de la UI.
-- [x] Traducciones de `state.completed` y `state.error` en los 8 idiomas.
-- [x] Ejercitar estados de background no observados con sesiones reales.
-      Hallazgo: `state` solo no distingue permiso de input — la clave es la
-      combinación `state`+`tempo` (working+blocked → permiso; blocked+blocked
-      → input). `map_state` ajustado; campo `needs` usado como detalle.
+## Phase 1b — Hybrid source (Agent View)
+- [x] Watcher for `~/.claude/jobs/` integrated (`jobs.rs`, crates `notify` + `dirs`).
+- [x] `state.json` schema verified empirically (sessionId camelCase,
+      detail/intent, createdAt/updatedAt RFC3339; `name` field also present).
+- [x] "Background wins" rule implemented in `set_background_snapshot()`.
+- [x] Reaper TTL scoped to foreground instances only.
+- [x] `Completed` and `Error` states added to `InstanceState` with urgency.
+- [x] Discrete `bg`/`fg` badge on each row in the UI.
+- [x] Translations for `state.completed` and `state.error` in all 8 languages.
+- [x] Exercise unobserved background states with real sessions.
+      Finding: `state` alone does not distinguish permission from input — the key is the
+      combination `state`+`tempo` (working+blocked → permission; blocked+blocked
+      → input). `map_state` adjusted; `needs` field used as detail.
 
-## Fase 2 — Máquina de estados + UI en vivo ✅
-- [x] Transiciones de `state.rs` completas y probadas con sesiones reales
-      (fg vía hooks; bg vía experimentos con `claude --bg` + `claude stop`).
-- [x] `emit("instances", ...)` y el frontend pinta cambios en vivo.
-- [x] Orden por urgencia (permiso > input > error > trabajando > unknown >
-      idle > completado).
-- [x] Derivar nombre de proyecto desde `cwd`: `$HOME` → `~`, abreviado a los
-      2 últimos segmentos si es profundo. Con tests unitarios (`cargo test`).
-- [x] Resumen del detalle de tool (`tool_name` + corte de `tool_input`),
-      verificado en vivo ("Bash · git ls-remote …").
+## Phase 2 — State machine + live UI ✅
+- [x] `state.rs` transitions complete and tested with real sessions
+      (foreground via hooks; background via experiments with `claude --bg` + `claude stop`).
+- [x] `emit("instances", ...)` and the frontend renders changes live.
+- [x] Sort by urgency (permission > input > error > working > unknown >
+      idle > completed).
+- [x] Derive project name from `cwd`: `$HOME` → `~`, abbreviated to the
+      last 2 segments when deeply nested. With unit tests (`cargo test`).
+- [x] Tool detail summary (`tool_name` + trimmed `tool_input`),
+      verified live ("Bash · git ls-remote …").
 
-## Fase 3 — Sesiones muertas ✅
-- [x] Reaper TTL: `Working` viejo → `Unknown`; muy viejo → eliminar. Cubierto
-      con 7 tests unitarios (TTL, scope foreground-only, regla de fusión).
-- [x] Probado matando una sesión a lo bruto (`kill -9`, sin `SessionEnd`):
-      `working` → `unknown` verificado en vivo a los ~230s vía
-      `GET /debug/snapshot` (endpoint nuevo de introspección, solo loopback).
-- Nota: el store es memoria pura — reiniciar la app borra las instancias fg
-      hasta que sus sesiones emitan el siguiente hook. Es el comportamiento
-      esperado, no un bug.
+## Phase 3 — Dead sessions ✅
+- [x] Reaper TTL: stale `Working` → `Unknown`; too stale → remove. Covered
+      with 7 unit tests (TTL, foreground-only scope, merge rule).
+- [x] Tested by killing a session forcefully (`kill -9`, without `SessionEnd`):
+      `working` → `unknown` verified live at ~230s via
+      `GET /debug/snapshot` (new introspection endpoint, loopback only).
+- Note: the store is pure memory — restarting the app clears foreground instances
+      until their sessions emit the next hook. This is expected behavior, not a bug.
 
-## Fase 4 — Bandeja y preferencias ✅
-- [x] Icono refleja el estado: calm (tray-calm-64.png) cuando attention_count==0,
-      alert (tray-alert-64.png) cuando >0. Titulo numerico en macOS junto al icono.
-- [x] Propagacion centralizada en `refresh.rs::refresh()`: sustituye los tres
-      puntos de emision dispersos (server.rs, jobs.rs, reaper de main.rs).
-- [x] Toggles del menú cableados:
-      - `floating_window`: show/hide ventana (ya funcionaba, verificado).
-      - `always_on_top`: set_always_on_top (ya funcionaba, verificado).
-      - `auto_hide`: oculta ventana cuando attention==0; muestra cuando >0
-        (solo si floating_window está activo). Aplica de inmediato al toggle.
-      - `compact`: emite evento "prefs" al frontend; aplica clase CSS `.compact`
-        (oculta `.detail`, reduce padding de fila).
-      - `open_at_login`: usa `tauri-plugin-autostart` (enable/disable via
+## Phase 4 — System tray and preferences ✅
+- [x] Icon reflects state: calm (tray-calm-64.png) when attention_count==0,
+      alert (tray-alert-64.png) when >0. Numeric title in macOS next to the icon.
+- [x] Centralized propagation in `refresh.rs::refresh()`: replaces the three
+      scattered emit points (server.rs, jobs.rs, main.rs reaper).
+- [x] Menu toggles wired up:
+      - `floating_window`: show/hide window (already working, verified).
+      - `always_on_top`: set_always_on_top (already working, verified).
+      - `auto_hide`: hides the window when attention==0; shows it when >0
+        (only if `floating_window` is active). Applies immediately on toggle.
+      - `compact`: emits a "prefs" event to the frontend; applies `.compact` CSS class
+        (hides `.detail`, reduces row padding).
+      - `open_at_login`: uses `tauri-plugin-autostart` (enable/disable via
         `ManagerExt::autolaunch()`).
-- [x] `PrefsState` como managed state (`Mutex<Prefs>`): refresh() lee prefs sin
-      I/O de disco en cada evento de hook.
-- [x] `config.rs`: añadidos `load_from_path()` y `default_prefs_path()` para
-      inicializar el managed state antes del setup().
-- [x] Frontend: `Prefs` type en types.ts, `onPrefs`/`fetchPrefs` en ipc.ts,
-      prop `compact` en MonitorWindow, clase `.compact` en styles.css.
-- [x] 4 tests nuevos en `refresh.rs` (tray_variant + Prefs serde). Total: 15.
+- [x] `PrefsState` as managed state (`Mutex<Prefs>`): refresh() reads prefs without
+      disk I/O on each hook event.
+- [x] `config.rs`: added `load_from_path()` and `default_prefs_path()` to
+      initialize the managed state before setup().
+- [x] Frontend: `Prefs` type in types.ts, `onPrefs`/`fetchPrefs` in ipc.ts,
+      `compact` prop in MonitorWindow, `.compact` class in styles.css.
+- [x] 4 new tests in `refresh.rs` (tray_variant + Prefs serde). Total: 15.
 
-## Fase 5 — Pulido por plataforma
-- [x] macOS: flotar sobre fullscreen. Integración de `tauri-nspanel` (branch
-      `v2.1`, commit `a3122e89`). `macos.rs` convierte el `WebviewWindow` en un
-      `NSPanel` subclass vía `to_panel::<MonitorPanel>()` y lo configura con:
-      - `StyleMask::empty().nonactivating_panel()` — no roba foco.
-      - `PanelLevel::Status` (25) — penetra el Space de fullscreen.
+## Phase 5 — Platform polish
+- [x] macOS: float over fullscreen. Integration of `tauri-nspanel` (branch
+      `v2.1`, commit `a3122e89`). `macos.rs` converts the `WebviewWindow` into an
+      `NSPanel` subclass via `to_panel::<MonitorPanel>()` and configures it with:
+      - `StyleMask::empty().nonactivating_panel()` — does not steal focus.
+      - `PanelLevel::Status` (25) — penetrates the fullscreen Space.
       - `CollectionBehavior::can_join_all_spaces + full_screen_auxiliary + stationary`.
-      El enfoque NSWindow+FullScreenAuxiliary+level 101 fue descartado tras
-      verificación empírica: la ventana desaparece igualmente al entrar en
-      fullscreen aunque los bits estén correctamente aplicados (confirmado por
-      logs). NSPanel es requerido por macOS para esta garantía.
-      Verificación manual pendiente (requiere GUI fullscreen).
-- [ ] Linux/Wayland: regla de Hyprland documentada y `class` real verificada.
-- [ ] Windows: build y prueba.
-- [ ] Empaquetado: `.dmg` / `.AppImage`+`.deb` / `.msi`.
+      The NSWindow+FullScreenAuxiliary+level 101 approach was discarded after
+      empirical verification: the window disappears anyway when entering fullscreen
+      even when the bits are correctly applied (confirmed by logs). NSPanel is
+      required by macOS for this guarantee.
+      Manual verification pending (requires GUI fullscreen).
+- [ ] Linux/Wayland: Hyprland rule documented and actual `class` verified.
+- [ ] Windows: build and test.
+- [ ] Packaging: `.dmg` / `.AppImage`+`.deb` / `.msi`.
 
 ## Ideas / backlog
-- Click en una fila → traer al frente esa terminal (difícil multiplataforma) o
-  copiar el `cwd`.
-- Histórico de tiempos por sesión (SQLite) para métricas.
-- Notificación de escritorio al pasar a `WaitingPermission` (vía el propio
-  `terminalSequence` del hook, o nativa de la app).
-- Subagentes: `SubagentStart`/`SubagentStop` como sub-filas anidadas.
+- Click on a row → bring that terminal to the foreground (difficult cross-platform) or
+  copy the `cwd`.
+- Session time history (SQLite) for metrics.
+- Desktop notification when transitioning to `WaitingPermission` (via the hook's own
+  `terminalSequence`, or native app notification).
+- Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.

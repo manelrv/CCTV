@@ -1,140 +1,137 @@
 # WORKLOG — CCTV
 
-Registro cronológico del trabajo realizado. Formato: fecha + fase + bullets concisos.
+Chronological log of work completed. Format: date + phase + concise bullets.
 
 ---
 
 ## 2026-06-06
 
-### Fase 0 — Compilación y arranque inicial
+### Phase 0 — Compilation and initial startup
 
-- Arreglos para que `npm run tauri dev` compilara:
-  - Eliminada sección `[lib]` espuria en `Cargo.toml`.
-  - Añadida feature `macos-private-api` a la dependencia de tauri.
-  - Añadido `.manage(store)` en `main.rs` (faltaba para el comando `get_instances`).
-  - Eliminado `server.rs` duplicado que había en la raíz del proyecto.
-- Generados iconos con `npx tauri icon icons/icon-app-1024.png`.
-- Ventana muestra datos mock (sembrados en store bajo `debug_assertions`) — pipeline completo funcionando.
+- Fixes to get `npm run tauri dev` to compile:
+  - Removed spurious `[lib]` section from `Cargo.toml`.
+  - Added `macos-private-api` feature to the tauri dependency.
+  - Added `.manage(store)` in `main.rs` (missing for the `get_instances` command).
+  - Removed duplicate `server.rs` that was at the project root.
+- Icons generated with `npx tauri icon icons/icon-app-1024.png`.
+- Window shows mock data (seeded into the store under `debug_assertions`) — full pipeline working.
 
-### Fase 1 — Hooks reales
+### Phase 1 — Real hooks
 
-- Servidor axum escuchando en `127.0.0.1:8787`; `/health` responde OK.
-- Las 8 rutas de `docs/HOOKS.md` parsean payload y responden `200` vacío inmediato.
-- Hooks fusionados en `~/.claude/settings.json` con backup previo (`settings.json.bak-pre-cctv-hooks`).
-- Hook previo de `UserPromptSubmit` (gentle-ai) convive en el mismo array sin conflicto.
-- Sesión real de Claude Code verificada: aparece en la ventana y cambia de estado.
-- Mocks de fase 0 eliminados de `main.rs`.
+- Axum server listening on `127.0.0.1:8787`; `/health` responds OK.
+- All 8 routes from `docs/HOOKS.md` parse payload and respond with an immediate empty `200`.
+- Hooks merged into `~/.claude/settings.json` with a prior backup (`settings.json.bak-pre-cctv-hooks`).
+- Pre-existing `UserPromptSubmit` hook (gentle-ai) coexists in the same array without conflict.
+- Real Claude Code session verified: appears in the window and changes state.
+- Phase 0 mocks removed from `main.rs`.
 
-### i18n + renombre
+### i18n + rename
 
-- App renombrada de "Claude Code Monitor" a "CCTV" (nombre visible en la UI).
-- 8 idiomas implementados: en, es, pt, de, fr, it, ca, ru.
-- Estructura de claves: `state.*`, `summary.*`, `empty`.
-- Russo tiene 3 formas de plural correctamente configuradas.
+- App renamed from "Claude Code Monitor" to "CCTV" (name visible in the UI).
+- 8 languages implemented: en, es, pt, de, fr, it, ca, ru.
+- Key structure: `state.*`, `summary.*`, `empty`.
+- Russian has 3 plural forms correctly configured.
 
-### Fase 1b — Fuente híbrida (Agent View)
+### Phase 1b — Hybrid source (Agent View)
 
-- Esquema real de `~/.claude/jobs/<id>/state.json` verificado empíricamente con
-  sesión `be4c186b`. Campos clave: `sessionId` (camelCase), `state`, `detail`,
+- Real schema of `~/.claude/jobs/<id>/state.json` verified empirically with
+  session `be4c186b`. Key fields: `sessionId` (camelCase), `state`, `detail`,
   `intent`, `name`, `cwd`, `createdAt`, `updatedAt` (RFC3339), `daemonShort`.
-  Los campos `status`, `summary`, `title` que asumía el scaffold NO existen.
-- `jobs.rs` corregido: struct `JobState` con `serde(rename_all = "camelCase")`;
-  campos defensivos `Option`; detalle con fallback `detail → intent → name`.
-- Timestamps RFC3339 → epoch secs implementado con parser manual (sin chrono).
-  Fallback a mtime del fichero cuando falta o es inparseable.
-- `state.rs` extendido:
-  - Enum `Source { Background, Foreground }` añadido y serializado.
-  - `Instance` gana campo `source: Source`.
-  - `InstanceState` gana `Completed` y `Error` con urgency correcto.
-  - `apply()` marca `source: Foreground` en insert (path de hooks).
-  - `set_background_snapshot()`: elimina background anterior + foreground solapado, inserta nuevo set.
-  - `reap()`: solo toca instancias Foreground.
-  - `project_from_cwd` pasa a `pub(crate)` (importado desde `jobs.rs`).
-- `main.rs`: añadido `mod jobs` y llamada `jobs::start(store, handle)` tras el spawn del servidor.
-- `Cargo.toml`: añadidos `notify = "6"` y `dirs = "5"`.
+  The `status`, `summary`, `title` fields assumed by the scaffold DO NOT exist.
+- `jobs.rs` corrected: `JobState` struct with `serde(rename_all = "camelCase")`;
+  defensive `Option` fields; detail with fallback `detail → intent → name`.
+- RFC3339 timestamps → epoch secs implemented with a manual parser (no chrono).
+  Fallback to file mtime when missing or unparseable.
+- `state.rs` extended:
+  - `Source { Background, Foreground }` enum added and serialized.
+  - `Instance` gains `source: Source` field.
+  - `InstanceState` gains `Completed` and `Error` with correct urgency.
+  - `apply()` marks `source: Foreground` on insert (hooks path).
+  - `set_background_snapshot()`: removes prior background + overlapping foreground, inserts new set.
+  - `reap()`: only touches Foreground instances.
+  - `project_from_cwd` changed to `pub(crate)` (imported from `jobs.rs`).
+- `main.rs`: added `mod jobs` and `jobs::start(store, handle)` call after server spawn.
+- `Cargo.toml`: added `notify = "6"` and `dirs = "5"`.
 - Frontend:
-  - `types.ts`: `InstanceState` gana `"completed"` y `"error"`; `Instance` gana `source: Source`.
-  - `InstanceRow.tsx`: badge `bg`/`fg` junto al nombre de proyecto.
-  - `styles.css`: `.s-completed` (verde suave) y `.s-error` (rojo) + `.source-badge`.
-  - 8 ficheros i18n: añadidos `state.completed` y `state.error`.
-- Docs: `ARCHITECTURE.md` actualizado con sección de fuentes híbridas y módulo `jobs.rs`;
-  `CLAUDE.md` diagrama ASCII actualizado para mostrar las dos fuentes;
-  `ROADMAP.md` sección Fase 1b añadida.
+  - `types.ts`: `InstanceState` gains `"completed"` and `"error"`; `Instance` gains `source: Source`.
+  - `InstanceRow.tsx`: `bg`/`fg` badge next to the project name.
+  - `styles.css`: `.s-completed` (soft green) and `.s-error` (red) + `.source-badge`.
+  - 8 i18n files: `state.completed` and `state.error` added.
+- Docs: `ARCHITECTURE.md` updated with hybrid sources section and `jobs.rs` module;
+  `CLAUDE.md` ASCII diagram updated to show both sources;
+  `ROADMAP.md` Phase 1b section added.
 
 ### Repo
 
-- `git init` + `.gitignore` + commit inicial `b0555f5` (104 ficheros).
+- `git init` + `.gitignore` + initial commit `b0555f5` (104 files).
 
-### Fase 2 — Máquina de estados + UI en vivo
+### Phase 2 — State machine + live UI
 
-- Smoke test híbrido en vivo: 4 instancias reales (3 fg + 1 bg) con orden por
-  urgencia, badge bg/fg y detalle de tool funcionando.
-- `project_from_cwd`: `$HOME` → `~` y abreviación a 2 últimos segmentos en
-  paths profundos (`~/…/CCTV/src-tauri`). Primeros tests unitarios del
-  proyecto (4, `cargo test`).
-- Estados bg restantes verificados empíricamente con jobs reales
+- Live hybrid smoke test: 4 real instances (3 fg + 1 bg) with urgency ordering,
+  bg/fg badge, and tool detail working.
+- `project_from_cwd`: `$HOME` → `~` and abbreviation to last 2 segments on deep
+  paths (`~/…/CCTV/src-tauri`). First unit tests in the project (4, `cargo test`).
+- Remaining bg states verified empirically with real jobs
   (`claude --bg` + `claude stop`):
-  - `stopped` (parado a mano), `failed` (modelo inválido), `blocked` (pregunta).
-  - Hallazgo clave: permiso vs input NO se distingue por `state` —
-    `working`+`tempo=blocked` → permiso; `blocked`+`blocked` → input.
-  - `map_state(state, tempo)` reescrito; campo `needs` (pregunta o
-    "approve Tool: path") usado como detalle prioritario.
-- Footgun de CLI documentado: `claude --bg --help` lanza un job real en vez de
-  mostrar ayuda; el stop es `claude stop <id>` (no subcomando de `agents`).
+  - `stopped` (manually stopped), `failed` (invalid model), `blocked` (question).
+  - Key finding: permission vs input are NOT distinguished by `state` —
+    `working`+`tempo=blocked` → permission; `blocked`+`blocked` → input.
+  - `map_state(state, tempo)` rewritten; `needs` field (question or
+    "approve Tool: path") used as priority detail.
+- CLI footgun documented: `claude --bg --help` launches a real job instead of
+  showing help; stop is `claude stop <id>` (not a subcommand of `agents`).
 
-### Fase 3 — Sesiones muertas (reaper)
+### Phase 3 — Dead sessions (reaper)
 
-- 7 tests unitarios nuevos: TTL stale/remove, scope foreground-only del reaper,
-  y regla "background manda" de `set_background_snapshot` (11 tests en total).
-- Endpoint `GET /debug/snapshot` añadido en `server.rs`: introspección del
-  store vía curl, solo loopback. Imprescindible para verificar sin mirar la UI.
-- Test real: sesión headless (`claude -p`) matada con `kill -9` (sin
-  `SessionEnd`) → `working` → `unknown` a los ~230s. Verificado por snapshot.
-- Descubrimientos:
-  - `claude -p` (headless) SÍ dispara hooks — apareció en el store al lanzarla.
-  - Reiniciar la app borra las instancias fg (store en memoria); reaparecen
-    con el siguiente hook de cada sesión viva. Esperado, no bug.
-  - macOS no tiene `timeout` (coreutils); cuidado en scripts de prueba.
-  - `claude -p --debug "prompt"` parsea mal: `--debug` se traga el prompt.
-    Orden correcto: `claude --debug hooks -p "prompt"`.
+- 7 new unit tests: TTL stale/remove, foreground-only scope of the reaper,
+  and "background wins" rule of `set_background_snapshot` (11 tests total).
+- `GET /debug/snapshot` endpoint added in `server.rs`: store introspection via
+  curl, loopback only. Essential for verifying without looking at the UI.
+- Real test: headless session (`claude -p`) killed with `kill -9` (no
+  `SessionEnd`) → `working` → `unknown` after ~230s. Verified via snapshot.
+- Discoveries:
+  - `claude -p` (headless) DOES fire hooks — appeared in the store when launched.
+  - Restarting the app clears fg instances (in-memory store); they reappear
+    with the next hook from each live session. Expected, not a bug.
+  - macOS does not have `timeout` (coreutils); watch out in test scripts.
+  - `claude -p --debug "prompt"` parses incorrectly: `--debug` swallows the prompt.
+    Correct order: `claude --debug hooks -p "prompt"`.
 
 ## 2026-06-07
 
-### Fase 4 — Bandeja y preferencias
+### Phase 4 — System tray and preferences
 
-- `refresh.rs` nuevo: punto único de propagación (webview + icono bandeja +
-  título numérico + auto-hide). Sustituye las 3 emisiones dispersas que había
-  en `server.rs`, `jobs.rs` y el reaper de `main.rs`.
-- Icono de bandeja dinámico: calm/alert según `attention_count()`, embebidos
-  con `include_bytes!` desde `icons/`. Contador como título en macOS.
-- Los 5 toggles del menú cableados (floating, on-top, auto-hide, compact,
-  autostart vía `tauri-plugin-autostart`).
-- `PrefsState` (Mutex managed state): prefs en memoria, cero I/O de disco por
-  evento de hook.
-- Modo compacto en frontend: evento "prefs" + clase CSS `.compact`.
-- 4 tests nuevos (15 en total).
-- Gotchas: `try_state()` devuelve `Option`, no `Result`; el trait del plugin
-  autostart es `autolaunch()`; rutas de `include_bytes!` desde `src/` son
-  `../../icons/`.
+- New `refresh.rs`: single propagation point (webview + tray icon + numeric title +
+  auto-hide). Replaces the 3 scattered emissions that existed in `server.rs`,
+  `jobs.rs`, and the reaper in `main.rs`.
+- Dynamic tray icon: calm/alert based on `attention_count()`, embedded with
+  `include_bytes!` from `icons/`. Counter as title on macOS.
+- All 5 menu toggles wired (floating, on-top, auto-hide, compact,
+  autostart via `tauri-plugin-autostart`).
+- `PrefsState` (Mutex managed state): prefs in memory, zero disk I/O per hook event.
+- Compact mode in frontend: "prefs" event + `.compact` CSS class.
+- 4 new tests (15 total).
+- Gotchas: `try_state()` returns `Option`, not `Result`; the autostart plugin
+  trait is `autolaunch()`; `include_bytes!` paths from `src/` are `../../icons/`.
 
-### Fase 5 — Float sobre fullscreen en macOS
+### Phase 5 — Float over fullscreen on macOS
 
-- Receta final (las TRES piezas son necesarias):
-  1. **NSPanel** vía plugin `tauri-nspanel` (branch v2.1): un NSWindow normal
-     de Tauri NO entra al Space de fullscreen aunque tenga collectionBehavior
-     0x101 (AllSpaces|FullScreenAuxiliary) y level 101 — verificado
-     empíricamente con logs. macOS lo limita a subclases de NSPanel
-     (no documentado por Apple).
-  2. **ActivationPolicy::Accessory** — utilidad de menubar, sin icono en Dock.
-  3. **Main-thread dispatch**: el handle crudo del panel hace msg_send directo;
-     llamar show()/hide() desde hilos de tokio/watcher/reaper aborta con
-     SIGTRAP. Las APIs de Tauri redespachan internamente; el panel NO.
-     Solución: `refresh::set_panel_visible()` con `run_on_main_thread` y el
-     panel resuelto dentro del closure.
-- Panel no-activante: clickar el monitor no roba el foco a la app activa.
-- Crash diagnosticado vía `~/Library/Logs/DiagnosticReports/*.ips`
-  (exit 133 = SIGTRAP; el faultingThread mostró apply_auto_hide → orderOut).
+- Final recipe (ALL THREE pieces are required):
+  1. **NSPanel** via `tauri-nspanel` plugin (branch v2.1): a regular Tauri NSWindow
+     does NOT enter the fullscreen Space even with collectionBehavior
+     0x101 (AllSpaces|FullScreenAuxiliary) and level 101 — verified
+     empirically with logs. macOS restricts this to NSPanel subclasses
+     (undocumented by Apple).
+  2. **ActivationPolicy::Accessory** — menubar utility, no Dock icon.
+  3. **Main-thread dispatch**: the raw panel handle does direct msg_send;
+     calling show()/hide() from tokio/watcher/reaper threads aborts with
+     SIGTRAP. Tauri APIs re-dispatch internally; the panel does NOT.
+     Solution: `refresh::set_panel_visible()` with `run_on_main_thread` and the
+     panel resolved inside the closure.
+- Non-activating panel: clicking the monitor does not steal focus from the active app.
+- Crash diagnosed via `~/Library/Logs/DiagnosticReports/*.ips`
+  (exit 133 = SIGTRAP; faultingThread showed apply_auto_hide → orderOut).
 
 ---
 
-_Verificación final: `cargo check` 0 errores · `cargo test` 15/15 · `tsc --noEmit` 0 errores · `npm run build` clean. Float sobre fullscreen verificado en vivo._
+_Final verification: `cargo check` 0 errors · `cargo test` 15/15 · `tsc --noEmit` 0 errors · `npm run build` clean. Float over fullscreen verified live._

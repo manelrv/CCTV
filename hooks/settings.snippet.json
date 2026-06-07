@@ -1,5 +1,5 @@
 {
-  "_comment": "Fusiona la clave 'hooks' dentro de tu ~/.claude/settings.json. Cada hook hace POST al servidor local de la app (puerto 8787). timeout corto y errores no bloqueantes: si la app esta cerrada, el hook falla en silencio sin frenar a Claude Code.",
+  "_comment": "Merge the 'hooks' key into your ~/.claude/settings.json. Each hook POSTs to the app's local server (port 8787). Short timeout and non-blocking errors: if the app is closed, the hook fails silently without slowing Claude Code down.",
   "hooks": {
     "SessionStart": [
       {

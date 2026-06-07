@@ -1,153 +1,152 @@
-# Arquitectura
+# Architecture
 
-## Proceso único
+## Single process
 
-El icono de la bandeja es el proceso que **vive siempre**. Hostea el servidor
-HTTP de los hooks y mantiene el estado. La ventana flotante es solo una *vista*
-del mismo proceso que se muestra/oculta. Ventajas:
+The system tray icon is the process that **stays alive permanently**. It hosts
+the hook HTTP server and maintains state. The floating window is just a *view*
+of the same process that is shown/hidden. Benefits:
 
-- El listener de los hooks está vivo mientras el icono esté en la bandeja,
-  aunque la ventana esté cerrada (resuelve el "el endpoint tiene que existir").
-- Un solo binario, sin daemon aparte.
+- The hook listener is alive as long as the icon is in the system tray,
+  even when the window is closed (solves the "the endpoint must exist" problem).
+- A single binary, no separate daemon.
 
-## Fuentes de estado (híbrido)
+## State sources (hybrid)
 
-El estado de las instancias viene de dos fuentes. Ver `docs/DATA-SOURCES.md`.
+Instance state comes from two sources. See `docs/DATA-SOURCES.md`.
 
-- **Fuente A — ficheros del supervisor** (`jobs.rs`): lee `~/.claude/jobs/<id>/state.json`
-  con un file watcher (`notify`). Cubre sesiones en segundo plano (`/bg`,
-  `claude --bg`, Agent View). Produce instancias con `source = background`.
-- **Fuente B — hooks HTTP** (`server.rs`): recibe POST de Claude Code en
-  `localhost:8787`. Cubre sesiones en primer plano (terminal normal). Produce
-  instancias con `source = foreground`.
+- **Source A — supervisor files** (`jobs.rs`): reads `~/.claude/jobs/<id>/state.json`
+  with a file watcher (`notify`). Covers background sessions (`/bg`,
+  `claude --bg`, Agent View). Produces instances with `source = background`.
+- **Source B — HTTP hooks** (`server.rs`): receives POST from Claude Code at
+  `localhost:8787`. Covers foreground sessions (normal terminal). Produces
+  instances with `source = foreground`.
 
-Regla de fusión: **background manda**. `set_background_snapshot()` en `state.rs`
-elimina cualquier entrada foreground que comparta `session_id` con las incoming
-de la Fuente A. El reaper TTL solo actúa sobre foreground (las background las
-gestiona el ciclo de vida de los ficheros del supervisor).
+Merge rule: **background wins**. `set_background_snapshot()` in `state.rs`
+removes any foreground entry that shares a `session_id` with incoming
+entries from Source A. The TTL reaper only acts on foreground (background entries
+are managed by the supervisor files lifecycle).
 
-## Componentes (src-tauri/src)
+## Components (src-tauri/src)
 
-- `main.rs` — punto de entrada. Arranca Tauri, registra `tauri-plugin-autostart`,
-  inicializa `PrefsState` como managed state, lanza el servidor axum, el watcher
-  de jobs y el reaper. Expone comandos `get_instances` y `get_prefs`.
-- `server.rs` — router axum. Una ruta por evento/subtipo (ver `docs/HOOKS.md`).
-  Cada handler: parsea → aplica al store → llama `refresh::refresh()` → responde `200`.
-- `state.rs` — `InstanceState` (enum con `Completed` y `Error`), `Instance`
-  (struct con campo `source: Source`), `Source` (enum `Background`/`Foreground`),
-  `Store` (`Mutex<HashMap<session_id, Instance>>`), las transiciones y el reaper TTL
-  (solo foreground). Exporta `project_from_cwd` como `pub(crate)`.
-- `jobs.rs` — Fuente A: file watcher sobre `~/.claude/jobs/` (crate `notify`).
-  Parsea el esquema real de `state.json` (verificado empíricamente 2026-06-06).
-  RFC3339 → epoch secs sin chrono: parser manual.
-- `refresh.rs` — propagacion centralizada del estado. `refresh(app, store)` es el
-  ÚNICO punto de emision: emite snapshot al webview, actualiza icono/titulo de
-  bandeja (calm/alert segun `attention_count()`), y aplica auto-hide/show usando
-  `PrefsState` (managed state, sin I/O). Tambien exporta `apply_auto_hide()` y
-  `tray_variant()` (testeable sin runtime Tauri).
-- `tray.rs` — icono + menú de preferencias. Todos los toggles cableados: floating,
-  always_on_top, auto_hide, compact (emite evento "prefs" al frontend), open_at_login
-  (via `tauri-plugin-autostart`). `persist_and_sync()` actualiza disco + managed state.
-- `config.rs` — persistencia de preferencias. `load_from_path()` y
-  `default_prefs_path()` permiten inicializar `PrefsState` antes del setup().
-- `hooks.rs` — tipos serde de los payloads.
+- `main.rs` — entry point. Starts Tauri, registers `tauri-plugin-autostart`,
+  initializes `PrefsState` as managed state, launches the axum server, the jobs
+  watcher, and the reaper. Exposes commands `get_instances` and `get_prefs`.
+- `server.rs` — axum router. One route per event/subtype (see `docs/HOOKS.md`).
+  Each handler: parses → applies to the store → calls `refresh::refresh()` → responds `200`.
+- `state.rs` — `InstanceState` (enum with `Completed` and `Error`), `Instance`
+  (struct with field `source: Source`), `Source` (enum `Background`/`Foreground`),
+  `Store` (`Mutex<HashMap<session_id, Instance>>`), the transitions, and the TTL reaper
+  (foreground only). Exports `project_from_cwd` as `pub(crate)`.
+- `jobs.rs` — Source A: file watcher on `~/.claude/jobs/` (crate `notify`).
+  Parses the real `state.json` schema (empirically verified 2026-06-06).
+  RFC3339 → epoch secs without chrono: manual parser.
+- `refresh.rs` — centralized state propagation. `refresh(app, store)` is the
+  ONLY emission point: emits snapshot to the webview, updates the system tray
+  icon/title (calm/alert based on `attention_count()`), and applies auto-hide/show
+  using `PrefsState` (managed state, no I/O). Also exports `apply_auto_hide()` and
+  `tray_variant()` (testable without Tauri runtime).
+- `tray.rs` — system tray icon + preferences menu. All toggles wired up: floating,
+  always_on_top, auto_hide, compact (emits "prefs" event to the frontend), open_at_login
+  (via `tauri-plugin-autostart`). `persist_and_sync()` updates disk + managed state.
+- `config.rs` — preferences persistence. `load_from_path()` and
+  `default_prefs_path()` allow initializing `PrefsState` before setup().
+- `hooks.rs` — serde types for the payloads.
 
 ## Frontend (src)
 
-- `App.tsx` — se suscribe al evento `instances` de Tauri, guarda el snapshot en
-  estado, renderiza `MonitorWindow`.
-- `components/MonitorWindow.tsx` — el panel: barra de título (zona arrastrable),
-  resumen de conteo, lista de filas **ordenadas por urgencia**.
-- `components/InstanceRow.tsx` — una fila: dot de color + proyecto + detalle +
-  estado + tiempo en estado.
-- `lib/ipc.ts` — wrapper de `listen()` de Tauri.
-- `types.ts` — espejo TS de los tipos de Rust.
+- `App.tsx` — subscribes to the `instances` Tauri event, stores the snapshot in
+  state, renders `MonitorWindow`.
+- `components/MonitorWindow.tsx` — the panel: title bar (draggable area),
+  count summary, list of rows **sorted by urgency**.
+- `components/InstanceRow.tsx` — one row: color dot + project + detail +
+  state + time in state.
+- `lib/ipc.ts` — wrapper for Tauri's `listen()`.
+- `types.ts` — TypeScript mirror of the Rust types.
 
-## Empuje de estado al webview
+## Pushing state to the webview
 
-`refresh::refresh(app, store)` es el ÚNICO punto de emisión. Lo llaman `server.rs`,
-`jobs.rs` y el reaper de `main.rs`. Emite dos eventos:
-- `"instances"` — snapshot completo de instancias (el array; sin diffs).
-- `"prefs"` — solo cuando cambia una preferencia (compact toggle desde `tray.rs`).
+`refresh::refresh(app, store)` is the ONLY emission point. It is called by `server.rs`,
+`jobs.rs`, and the reaper in `main.rs`. It emits two events:
+- `"instances"` — full snapshot of instances (the array; no diffs).
+- `"prefs"` — only when a preference changes (compact toggle from `tray.rs`).
 
-El frontend escucha con `listen()`. No hay polling.
+The frontend listens with `listen()`. No polling.
 
-## Ventana flotante
+## Floating window
 
-Config estática en `tauri.conf.json`: `decorations: false`, `transparent: true`,
-`alwaysOnTop: true`, `skipTaskbar: true`, `visible: false` (arranca oculta).
-`macOSPrivateApi: true` es necesario para la transparencia en macOS.
+Static config in `tauri.conf.json`: `decorations: false`, `transparent: true`,
+`alwaysOnTop: true`, `skipTaskbar: true`, `visible: false` (starts hidden).
+`macOSPrivateApi: true` is required for transparency on macOS.
 
-En runtime (setup de `main.rs`):
-- `set_visible_on_all_workspaces(true)` para que siga visible al cambiar de
-  espacio.
+At runtime (setup in `main.rs`):
+- `set_visible_on_all_workspaces(true)` so it stays visible when switching
+  spaces.
 
-### macOS — Por qué NSPanel es obligatorio
+### macOS — Why NSPanel is mandatory
 
-Para flotar **sobre apps en fullscreen**, un `NSWindow` ordinario es insuficiente
-aunque se apliquen todos los bits correctos:
+To float **over fullscreen apps**, an ordinary `NSWindow` is insufficient
+even when all the correct bits are applied:
 
 - `collectionBehavior = CanJoinAllSpaces | FullScreenAuxiliary` (0x101)
 - `level = NSPopUpMenuWindowLevel` (101)
 - `ActivationPolicy::Accessory`
 
-Todo esto fue verificado empíricamente (confirmado via logs de la app). Aun así,
-la ventana desaparecía al entrar otra app en fullscreen. La causa: macOS
-internamente requiere que la ventana sea una subclase de **NSPanel** para
-respetar `FullScreenAuxiliary` en el Space de fullscreen de otra app.
+All of this was empirically verified (confirmed via app logs). Even so,
+the window disappeared when another app went fullscreen. The cause: macOS
+internally requires the window to be a subclass of **NSPanel** to
+respect `FullScreenAuxiliary` in another app's fullscreen Space.
 
-**Solución:** plugin `tauri-nspanel` (branch `v2.1`) que convierte el
-`WebviewWindow` en un `NSPanel` subclass real. En `setup()` se llama
-`macos::setup_panel(&w)` (`src/macos.rs`) que:
+**Solution:** plugin `tauri-nspanel` (branch `v2.1`) that converts the
+`WebviewWindow` into a real `NSPanel` subclass. In `setup()`, `macos::setup_panel(&w)`
+is called (`src/macos.rs`), which:
 
-1. Convierte la ventana: `window.to_panel::<MonitorPanel>()` (trait
-   `WebviewWindowExt` del plugin). El panel queda registrado en el
-   `WebviewPanelManager` del plugin y es recuperable con
+1. Converts the window: `window.to_panel::<MonitorPanel>()` (the plugin's
+   `WebviewWindowExt` trait). The panel is registered in the plugin's
+   `WebviewPanelManager` and can be retrieved with
    `app.get_webview_panel("monitor")`.
-2. Estilo no-activating: `StyleMask::empty().nonactivating_panel()` — el panel
-   no roba el foco de la app activa (incluso en fullscreen).
-3. Nivel `PanelLevel::Status` (25) — mismo nivel que los indicadores de la
-   barra de estado del sistema.
+2. Non-activating style: `StyleMask::empty().nonactivating_panel()` — the panel
+   does not steal focus from the active app (even in fullscreen).
+3. Level `PanelLevel::Status` (25) — same level as system status bar indicators.
 4. `CollectionBehavior`: `can_join_all_spaces() + full_screen_auxiliary() +
-   stationary()` — visible en todos los Spaces, admitido en fullscreen Spaces,
-   no se mueve con Exposé.
+   stationary()` — visible on all Spaces, admitted in fullscreen Spaces,
+   does not move with Exposé.
 
-El plugin usa las mismas versiones de `objc2`/`objc2-app-kit`/`objc2-foundation`
-que Tauri trae como dependencias transitivas — sin duplicado en el binario.
+The plugin uses the same versions of `objc2`/`objc2-app-kit`/`objc2-foundation`
+that Tauri brings as transitive dependencies — no duplication in the binary.
 
-`tray.rs` y `refresh.rs` llaman a `app.get_webview_panel("monitor")` para
-mostrar/ocultar el panel (en lugar de `get_webview_window`), usando el trait
-`tauri_nspanel::ManagerExt`. Si el panel no está disponible (race en init o
-plataforma no-macOS), hacen fallback a `get_webview_window`.
+`tray.rs` and `refresh.rs` call `app.get_webview_panel("monitor")` to
+show/hide the panel (instead of `get_webview_window`), using the
+`tauri_nspanel::ManagerExt` trait. If the panel is not available (init race or
+non-macOS platform), they fall back to `get_webview_window`.
 
 ### Linux / Wayland
 
-- **X11:** funciona directo.
-- **Wayland:** el always-on-top no lo controla la app sino el compositor. En
-  **Hyprland** se resuelve con reglas (ajusta `class`/`title` a los reales):
+- **X11:** works out of the box.
+- **Wayland:** always-on-top is controlled by the compositor, not the app. On
+  **Hyprland** it is solved with rules (adjust `class`/`title` to the real values):
   ```
   windowrulev2 = float, class:^(cctv)$
   windowrulev2 = pin, class:^(cctv)$
   windowrulev2 = nofocus, class:^(cctv)$
   ```
-  > TODO(claude-code): documentar la `class` real que reporta la ventana en
-  > Wayland y dejar el snippet listo en el README.
+  > TODO(claude-code): document the real `class` the window reports on
+  > Wayland and leave the snippet ready in the README.
 
 ### Windows
 
-- `always_on_top` + transparencia sin fricción. `skipTaskbar` oculta de la barra.
+- `always_on_top` + transparency without friction. `skipTaskbar` hides from the taskbar.
 
-## Bandeja y preferencias
+## System tray and preferences
 
-Menú con toggles (estado persistido en `config.rs` + `PrefsState` managed state):
+Menu with toggles (state persisted in `config.rs` + `PrefsState` managed state):
 
-- `floating_window` — mostrar/ocultar la ventana.
-- `always_on_top` — fijar encima (`set_always_on_top`).
-- `auto_hide` — ocultar cuando `attention_count()==0`; reaparece ante
-  `WaitingPermission`/`WaitingInput` (solo si `floating_window` está activo).
-- `compact` — modo compacto: emite evento "prefs" al frontend, que aplica clase
-  CSS `.compact` (oculta `.detail`, reduce padding). Sin recarga.
-- `open_at_login` — autoarranque via `tauri-plugin-autostart` (LaunchAgent en macOS).
+- `floating_window` — show/hide the window.
+- `always_on_top` — pin on top (`set_always_on_top`).
+- `auto_hide` — hide when `attention_count()==0`; reappears on
+  `WaitingPermission`/`WaitingInput` (only if `floating_window` is active).
+- `compact` — compact mode: emits "prefs" event to the frontend, which applies
+  the CSS class `.compact` (hides `.detail`, reduces padding). No reload.
+- `open_at_login` — autostart via `tauri-plugin-autostart` (LaunchAgent on macOS).
 
-El icono cambia entre calm y alert segun `attention_count()`. En macOS el titulo
-de la bandeja muestra el numero de instancias que reclaman.
+The icon alternates between calm and alert based on `attention_count()`. On macOS the
+system tray title shows the number of instances requesting attention.
