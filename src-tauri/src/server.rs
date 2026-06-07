@@ -4,7 +4,12 @@
 
 use crate::hooks::{summarize_detail, HookPayload};
 use crate::state::{InstanceState, Store};
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
@@ -27,6 +32,9 @@ pub async fn serve(state: AppState) {
         .route("/hooks/notification/idle", post(notif_idle))
         .route("/hooks/stop", post(stop))
         .route("/health", post(|| async { StatusCode::OK }))
+        // Solo lectura, para depurar el store desde fuera (curl). Bind solo en
+        // loopback, sin datos sensibles mas alla de cwd/detalle.
+        .route("/debug/snapshot", get(debug_snapshot))
         .with_state(state);
 
     match tokio::net::TcpListener::bind(BIND_ADDR).await {
@@ -47,6 +55,10 @@ fn emit(state: &AppState) {
     let _ = state.app.emit("instances", &snapshot);
     // TODO(claude-code): aqui tambien actualizar el icono de bandeja
     // (color/contador) y aplicar auto-show/hide segun attention_count().
+}
+
+async fn debug_snapshot(State(s): State<AppState>) -> Json<Vec<crate::state::Instance>> {
+    Json(s.store.snapshot())
 }
 
 fn sid(p: &HookPayload) -> Option<String> {

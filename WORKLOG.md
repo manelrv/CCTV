@@ -82,6 +82,22 @@ Registro cronológico del trabajo realizado. Formato: fecha + fase + bullets con
 - Footgun de CLI documentado: `claude --bg --help` lanza un job real en vez de
   mostrar ayuda; el stop es `claude stop <id>` (no subcomando de `agents`).
 
+### Fase 3 — Sesiones muertas (reaper)
+
+- 7 tests unitarios nuevos: TTL stale/remove, scope foreground-only del reaper,
+  y regla "background manda" de `set_background_snapshot` (11 tests en total).
+- Endpoint `GET /debug/snapshot` añadido en `server.rs`: introspección del
+  store vía curl, solo loopback. Imprescindible para verificar sin mirar la UI.
+- Test real: sesión headless (`claude -p`) matada con `kill -9` (sin
+  `SessionEnd`) → `working` → `unknown` a los ~230s. Verificado por snapshot.
+- Descubrimientos:
+  - `claude -p` (headless) SÍ dispara hooks — apareció en el store al lanzarla.
+  - Reiniciar la app borra las instancias fg (store en memoria); reaparecen
+    con el siguiente hook de cada sesión viva. Esperado, no bug.
+  - macOS no tiene `timeout` (coreutils); cuidado en scripts de prueba.
+  - `claude -p --debug "prompt"` parsea mal: `--debug` se traga el prompt.
+    Orden correcto: `claude --debug hooks -p "prompt"`.
+
 ---
 
-_Verificación final: `cargo check` 0 errores · `cargo test` 4/4 · `tsc --noEmit` 0 errores · `npm run build` clean._
+_Verificación final: `cargo check` 0 errores · `cargo test` 11/11 · `tsc --noEmit` 0 errores · `npm run build` clean._

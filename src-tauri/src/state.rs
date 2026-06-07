@@ -226,6 +226,91 @@ mod tests {
 
     const HOME: Option<&str> = Some("/Users/x");
 
+    /// Construye una instancia con last_event_at desplazado `age_secs` al pasado.
+    fn mk(id: &str, source: Source, state: InstanceState, age_secs: u64) -> Instance {
+        let ts = now().saturating_sub(age_secs);
+        Instance {
+            session_id: id.to_string(),
+            cwd: format!("/tmp/{id}"),
+            project: id.to_string(),
+            state,
+            detail: None,
+            source,
+            started_at: ts,
+            last_event_at: ts,
+        }
+    }
+
+    fn insert(store: &Store, inst: Instance) {
+        store.inner.lock().unwrap().insert(inst.session_id.clone(), inst);
+    }
+
+    fn get_state(store: &Store, id: &str) -> Option<InstanceState> {
+        store.inner.lock().unwrap().get(id).map(|i| i.state)
+    }
+
+    #[test]
+    fn reap_marks_stale_foreground_working_as_unknown() {
+        let store = Store::default();
+        insert(&store, mk("fg", Source::Foreground, InstanceState::Working, STALE_SECS + 20));
+        assert!(store.reap());
+        assert_eq!(get_state(&store, "fg"), Some(InstanceState::Unknown));
+    }
+
+    #[test]
+    fn reap_removes_very_old_foreground() {
+        let store = Store::default();
+        insert(&store, mk("fg", Source::Foreground, InstanceState::Idle, REMOVE_SECS + 20));
+        assert!(store.reap());
+        assert_eq!(get_state(&store, "fg"), None);
+    }
+
+    #[test]
+    fn reap_never_touches_background() {
+        let store = Store::default();
+        insert(&store, mk("bg", Source::Background, InstanceState::Working, REMOVE_SECS + 999));
+        assert!(!store.reap());
+        assert_eq!(get_state(&store, "bg"), Some(InstanceState::Working));
+    }
+
+    #[test]
+    fn reap_keeps_fresh_foreground_untouched() {
+        let store = Store::default();
+        insert(&store, mk("fg", Source::Foreground, InstanceState::Working, 10));
+        assert!(!store.reap());
+        assert_eq!(get_state(&store, "fg"), Some(InstanceState::Working));
+    }
+
+    #[test]
+    fn background_snapshot_wins_over_foreground_with_same_id() {
+        let store = Store::default();
+        insert(&store, mk("x", Source::Foreground, InstanceState::Working, 0));
+        store.set_background_snapshot(vec![mk("x", Source::Background, InstanceState::Completed, 0)]);
+        let snap = store.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(snap[0].source, Source::Background);
+        assert_eq!(snap[0].state, InstanceState::Completed);
+    }
+
+    #[test]
+    fn background_snapshot_replaces_previous_background_set() {
+        let store = Store::default();
+        store.set_background_snapshot(vec![mk("a", Source::Background, InstanceState::Working, 0)]);
+        store.set_background_snapshot(vec![mk("b", Source::Background, InstanceState::Working, 0)]);
+        let snap = store.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(snap[0].session_id, "b");
+    }
+
+    #[test]
+    fn background_snapshot_leaves_unrelated_foreground_alone() {
+        let store = Store::default();
+        insert(&store, mk("fg", Source::Foreground, InstanceState::Working, 0));
+        store.set_background_snapshot(vec![mk("bg", Source::Background, InstanceState::Working, 0)]);
+        assert_eq!(store.snapshot().len(), 2);
+        assert_eq!(get_state(&store, "fg"), Some(InstanceState::Working));
+    }
+
     #[test]
     fn collapses_home_to_tilde() {
         assert_eq!(project_from_cwd_with_home("/Users/x/dev/agent-os", HOME), "~/dev/agent-os");

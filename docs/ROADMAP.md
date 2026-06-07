@@ -47,9 +47,15 @@ Marca `[x]` lo hecho. Cada fase debería dejar la app en un estado arrancable.
 - [x] Resumen del detalle de tool (`tool_name` + corte de `tool_input`),
       verificado en vivo ("Bash · git ls-remote …").
 
-## Fase 3 — Sesiones muertas
-- [ ] Reaper TTL: `Working` viejo → `Unknown`; muy viejo → eliminar.
-- [ ] Probar matando una sesión a lo bruto (sin `SessionEnd`).
+## Fase 3 — Sesiones muertas ✅
+- [x] Reaper TTL: `Working` viejo → `Unknown`; muy viejo → eliminar. Cubierto
+      con 7 tests unitarios (TTL, scope foreground-only, regla de fusión).
+- [x] Probado matando una sesión a lo bruto (`kill -9`, sin `SessionEnd`):
+      `working` → `unknown` verificado en vivo a los ~230s vía
+      `GET /debug/snapshot` (endpoint nuevo de introspección, solo loopback).
+- Nota: el store es memoria pura — reiniciar la app borra las instancias fg
+      hasta que sus sesiones emitan el siguiente hook. Es el comportamiento
+      esperado, no un bug.
 
 ## Fase 4 — Bandeja y preferencias
 - [ ] Icono refleja el estado más urgente (color/contador).
