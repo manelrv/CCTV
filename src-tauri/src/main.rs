@@ -5,19 +5,33 @@ mod config;
 mod hooks;
 mod i18n;
 mod jobs;
+mod refresh;
 mod server;
 mod state;
 mod tray;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 fn main() {
     let store = Arc::new(state::Store::default());
 
+    // Carga las prefs en managed state para que refresh() las lea sin I/O de disco.
+    let initial_prefs = {
+        // Necesitamos las prefs antes de setup() para inicializar el managed state.
+        // Usamos el path de config estandar de la plataforma directamente.
+        config::load_from_path(config::default_prefs_path())
+    };
+    let prefs_state = refresh::PrefsState(std::sync::Mutex::new(initial_prefs));
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(store.clone())
+        .manage(prefs_state)
         .setup({
             let store = store.clone();
             move |app| {
@@ -49,7 +63,7 @@ fn main() {
                     loop {
                         tick.tick().await;
                         if reaper_store.reap() {
-                            let _ = reaper_handle.emit("instances", &reaper_store.snapshot());
+                            refresh::refresh(&reaper_handle, &reaper_store);
                         }
                     }
                 });
@@ -60,8 +74,8 @@ fn main() {
                 Ok(())
             }
         })
-        // Comando para que el frontend pida el snapshot inicial al montar.
-        .invoke_handler(tauri::generate_handler![get_instances])
+        // Comandos para que el frontend pida el snapshot y las prefs al montar.
+        .invoke_handler(tauri::generate_handler![get_instances, get_prefs])
         .build(tauri::generate_context!())
         .expect("error al construir la app Tauri")
         .run(|_app, event| {
@@ -75,4 +89,9 @@ fn main() {
 #[tauri::command]
 fn get_instances(state: tauri::State<'_, Arc<state::Store>>) -> Vec<state::Instance> {
     state.snapshot()
+}
+
+#[tauri::command]
+fn get_prefs(state: tauri::State<'_, refresh::PrefsState>) -> config::Prefs {
+    state.0.lock().unwrap().clone()
 }

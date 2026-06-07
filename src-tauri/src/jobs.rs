@@ -21,6 +21,7 @@
 //!   state=stopped + tempo=idle                 → Unknown (detenido por usuario)
 //!   state=failed  + tempo=idle                 → Error
 
+use crate::refresh;
 use crate::state::{project_from_cwd, Instance, InstanceState, Source, Store};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
@@ -28,7 +29,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 /// Esquema defensivo (todo Option) de ~/.claude/jobs/<id>/state.json.
 /// Verificado empiricamente; parsea con serde(rename_all = "camelCase") para
@@ -219,7 +220,7 @@ fn mtime(p: &PathBuf) -> u64 {
 
 fn rescan_and_emit(store: &Arc<Store>, app: &AppHandle) {
     store.set_background_snapshot(scan());
-    let _ = app.emit("instances", &store.snapshot());
+    refresh::refresh(app, store);
 }
 
 /// Arranca el watcher en un hilo propio (notify es sincrono). Hace un scan

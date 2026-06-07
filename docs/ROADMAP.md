@@ -57,12 +57,27 @@ Marca `[x]` lo hecho. Cada fase debería dejar la app en un estado arrancable.
       hasta que sus sesiones emitan el siguiente hook. Es el comportamiento
       esperado, no un bug.
 
-## Fase 4 — Bandeja y preferencias
-- [ ] Icono refleja el estado más urgente (color/contador).
-- [ ] Toggles del menú cableados a su efecto.
-- [ ] Persistencia de prefs en `config.rs`.
-- [ ] `auto_hide`: ocultar cuando nada reclama, reaparecer ante permiso/idle.
-- [ ] `open_at_login` (autostart) — usar plugin `tauri-plugin-autostart`.
+## Fase 4 — Bandeja y preferencias ✅
+- [x] Icono refleja el estado: calm (tray-calm-64.png) cuando attention_count==0,
+      alert (tray-alert-64.png) cuando >0. Titulo numerico en macOS junto al icono.
+- [x] Propagacion centralizada en `refresh.rs::refresh()`: sustituye los tres
+      puntos de emision dispersos (server.rs, jobs.rs, reaper de main.rs).
+- [x] Toggles del menú cableados:
+      - `floating_window`: show/hide ventana (ya funcionaba, verificado).
+      - `always_on_top`: set_always_on_top (ya funcionaba, verificado).
+      - `auto_hide`: oculta ventana cuando attention==0; muestra cuando >0
+        (solo si floating_window está activo). Aplica de inmediato al toggle.
+      - `compact`: emite evento "prefs" al frontend; aplica clase CSS `.compact`
+        (oculta `.detail`, reduce padding de fila).
+      - `open_at_login`: usa `tauri-plugin-autostart` (enable/disable via
+        `ManagerExt::autolaunch()`).
+- [x] `PrefsState` como managed state (`Mutex<Prefs>`): refresh() lee prefs sin
+      I/O de disco en cada evento de hook.
+- [x] `config.rs`: añadidos `load_from_path()` y `default_prefs_path()` para
+      inicializar el managed state antes del setup().
+- [x] Frontend: `Prefs` type en types.ts, `onPrefs`/`fetchPrefs` en ipc.ts,
+      prop `compact` en MonitorWindow, clase `.compact` en styles.css.
+- [x] 4 tests nuevos en `refresh.rs` (tray_variant + Prefs serde). Total: 15.
 
 ## Fase 5 — Pulido por plataforma
 - [ ] macOS: flotar sobre fullscreen (NSWindow level si hace falta).

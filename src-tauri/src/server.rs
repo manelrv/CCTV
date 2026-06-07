@@ -3,6 +3,7 @@
 //! Responder rapido es critico: un hook lento ralentiza la sesion del usuario.
 
 use crate::hooks::{summarize_detail, HookPayload};
+use crate::refresh;
 use crate::state::{InstanceState, Store};
 use axum::{
     extract::State,
@@ -11,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 pub const BIND_ADDR: &str = "127.0.0.1:8787";
 
@@ -49,12 +50,9 @@ pub async fn serve(state: AppState) {
     }
 }
 
-/// Empuja el snapshot completo al webview. El frontend escucha "instances".
+/// Propaga el estado al webview y a la bandeja. Delega en refresh::refresh().
 fn emit(state: &AppState) {
-    let snapshot = state.store.snapshot();
-    let _ = state.app.emit("instances", &snapshot);
-    // TODO(claude-code): aqui tambien actualizar el icono de bandeja
-    // (color/contador) y aplicar auto-show/hide segun attention_count().
+    refresh::refresh(&state.app, &state.store);
 }
 
 async fn debug_snapshot(State(s): State<AppState>) -> Json<Vec<crate::state::Instance>> {

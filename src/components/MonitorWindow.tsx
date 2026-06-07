@@ -5,9 +5,11 @@ import { InstanceRow } from "./InstanceRow";
 export function MonitorWindow({
   instances,
   now,
+  compact,
 }: {
   instances: Instance[];
   now: number;
+  compact: boolean;
 }) {
   const { t } = useTranslation();
   const attention = instances.filter(
@@ -15,7 +17,8 @@ export function MonitorWindow({
   ).length;
 
   return (
-    <div className="panel">
+    // La clase "compact" activa las reglas CSS de modo compacto (styles.css).
+    <div className={compact ? "panel compact" : "panel"}>
       {/* Barra de titulo: zona arrastrable para mover la ventana sin marco */}
       <div className="titlebar" data-tauri-drag-region>
         <span className="title">{t("title")}</span>

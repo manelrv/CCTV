@@ -28,11 +28,11 @@ gestiona el ciclo de vida de los ficheros del supervisor).
 
 ## Componentes (src-tauri/src)
 
-- `main.rs` — punto de entrada. Arranca Tauri, configura la ventana, lanza el
-  servidor axum en una task de tokio, arranca el watcher de jobs, construye la
-  bandeja y el reaper.
+- `main.rs` — punto de entrada. Arranca Tauri, registra `tauri-plugin-autostart`,
+  inicializa `PrefsState` como managed state, lanza el servidor axum, el watcher
+  de jobs y el reaper. Expone comandos `get_instances` y `get_prefs`.
 - `server.rs` — router axum. Una ruta por evento/subtipo (ver `docs/HOOKS.md`).
-  Cada handler: parsea → aplica al store → emite snapshot → responde `200`.
+  Cada handler: parsea → aplica al store → llama `refresh::refresh()` → responde `200`.
 - `state.rs` — `InstanceState` (enum con `Completed` y `Error`), `Instance`
   (struct con campo `source: Source`), `Source` (enum `Background`/`Foreground`),
   `Store` (`Mutex<HashMap<session_id, Instance>>`), las transiciones y el reaper TTL
@@ -40,10 +40,16 @@ gestiona el ciclo de vida de los ficheros del supervisor).
 - `jobs.rs` — Fuente A: file watcher sobre `~/.claude/jobs/` (crate `notify`).
   Parsea el esquema real de `state.json` (verificado empíricamente 2026-06-06).
   RFC3339 → epoch secs sin chrono: parser manual.
-- `tray.rs` — icono + menú de preferencias (toggles) + acciones (mostrar/ocultar
-  ventana, salir).
-- `config.rs` — persistencia de preferencias del usuario en un JSON del config
-  dir de la app.
+- `refresh.rs` — propagacion centralizada del estado. `refresh(app, store)` es el
+  ÚNICO punto de emision: emite snapshot al webview, actualiza icono/titulo de
+  bandeja (calm/alert segun `attention_count()`), y aplica auto-hide/show usando
+  `PrefsState` (managed state, sin I/O). Tambien exporta `apply_auto_hide()` y
+  `tray_variant()` (testeable sin runtime Tauri).
+- `tray.rs` — icono + menú de preferencias. Todos los toggles cableados: floating,
+  always_on_top, auto_hide, compact (emite evento "prefs" al frontend), open_at_login
+  (via `tauri-plugin-autostart`). `persist_and_sync()` actualiza disco + managed state.
+- `config.rs` — persistencia de preferencias. `load_from_path()` y
+  `default_prefs_path()` permiten inicializar `PrefsState` antes del setup().
 - `hooks.rs` — tipos serde de los payloads.
 
 ## Frontend (src)
@@ -59,9 +65,12 @@ gestiona el ciclo de vida de los ficheros del supervisor).
 
 ## Empuje de estado al webview
 
-El backend emite `app.emit("instances", snapshot)` en cada cambio. El frontend
-escucha con `listen("instances", ...)`. No hay polling. El snapshot es el array
-completo de instancias (son pocas; no merece la pena hacer diffs).
+`refresh::refresh(app, store)` es el ÚNICO punto de emisión. Lo llaman `server.rs`,
+`jobs.rs` y el reaper de `main.rs`. Emite dos eventos:
+- `"instances"` — snapshot completo de instancias (el array; sin diffs).
+- `"prefs"` — solo cuando cambia una preferencia (compact toggle desde `tray.rs`).
+
+El frontend escucha con `listen()`. No hay polling.
 
 ## Ventana flotante
 
@@ -101,17 +110,15 @@ En runtime (setup de `main.rs`):
 
 ## Bandeja y preferencias
 
-Menú con toggles (estado persistido en `config.rs`):
+Menú con toggles (estado persistido en `config.rs` + `PrefsState` managed state):
 
 - `floating_window` — mostrar/ocultar la ventana.
-- `always_on_top` — fijar encima.
-- `auto_hide` — ocultar cuando nada reclama; reaparece ante
-  `WaitingPermission`/`WaitingInput`.
-- `compact` — modo compacto (solo dots) vs expandido (con detalle de tool).
-- `open_at_login` — autoarranque.
+- `always_on_top` — fijar encima (`set_always_on_top`).
+- `auto_hide` — ocultar cuando `attention_count()==0`; reaparece ante
+  `WaitingPermission`/`WaitingInput` (solo si `floating_window` está activo).
+- `compact` — modo compacto: emite evento "prefs" al frontend, que aplica clase
+  CSS `.compact` (oculta `.detail`, reduce padding). Sin recarga.
+- `open_at_login` — autoarranque via `tauri-plugin-autostart` (LaunchAgent en macOS).
 
-El icono puede reflejar el estado más urgente (color/contador). En macOS la
-barra admite texto junto al icono → mostrar el nº de instancias que reclaman.
-
-> TODO(claude-code): cablear cada toggle a su efecto real. El scaffold deja la
-> estructura y el show/hide + salir funcionando.
+El icono cambia entre calm y alert segun `attention_count()`. En macOS el titulo
+de la bandeja muestra el numero de instancias que reclaman.

@@ -98,6 +98,25 @@ Registro cronológico del trabajo realizado. Formato: fecha + fase + bullets con
   - `claude -p --debug "prompt"` parsea mal: `--debug` se traga el prompt.
     Orden correcto: `claude --debug hooks -p "prompt"`.
 
+## 2026-06-07
+
+### Fase 4 — Bandeja y preferencias
+
+- `refresh.rs` nuevo: punto único de propagación (webview + icono bandeja +
+  título numérico + auto-hide). Sustituye las 3 emisiones dispersas que había
+  en `server.rs`, `jobs.rs` y el reaper de `main.rs`.
+- Icono de bandeja dinámico: calm/alert según `attention_count()`, embebidos
+  con `include_bytes!` desde `icons/`. Contador como título en macOS.
+- Los 5 toggles del menú cableados (floating, on-top, auto-hide, compact,
+  autostart vía `tauri-plugin-autostart`).
+- `PrefsState` (Mutex managed state): prefs en memoria, cero I/O de disco por
+  evento de hook.
+- Modo compacto en frontend: evento "prefs" + clase CSS `.compact`.
+- 4 tests nuevos (15 en total).
+- Gotchas: `try_state()` devuelve `Option`, no `Result`; el trait del plugin
+  autostart es `autolaunch()`; rutas de `include_bytes!` desde `src/` son
+  `../../icons/`.
+
 ---
 
-_Verificación final: `cargo check` 0 errores · `cargo test` 11/11 · `tsc --noEmit` 0 errores · `npm run build` clean._
+_Verificación final: `cargo check` 0 errores · `cargo test` 15/15 · `tsc --noEmit` 0 errores · `npm run build` clean._

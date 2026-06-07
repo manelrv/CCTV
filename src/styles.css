@@ -219,3 +219,12 @@ body {
 .s-error {
   background: rgba(255, 69, 58, 0.08);
 }
+
+/* Modo compacto: oculta el detalle y reduce el padding de cada fila.
+   La clase .compact se aplica al .panel raiz segun la pref del usuario. */
+.compact .row {
+  padding: 6px 14px;
+}
+.compact .detail {
+  display: none;
+}

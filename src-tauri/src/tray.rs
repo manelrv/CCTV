@@ -3,11 +3,16 @@
 
 use crate::config;
 use crate::i18n;
+use crate::refresh::{self, PrefsState};
 use tauri::{
     menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
 };
+use tauri_plugin_autostart::ManagerExt;
+
+// Icono inicial de bandeja en calma (embed en el binario).
+const ICON_CALM: &[u8] = include_bytes!("../../icons/tray-calm-64.png");
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let prefs = config::load(app);
@@ -44,10 +49,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         .item(&quit)
         .build()?;
 
+    // Icono inicial: calm (no hay instancias al arrancar).
+    let calm_icon = tauri::image::Image::from_bytes(ICON_CALM)
+        .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
+
     let _tray = TrayIconBuilder::with_id("main")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .icon(app.default_window_icon().cloned().unwrap())
+        .icon(calm_icon)
         .tooltip("CCTV")
         .on_menu_event(move |app, event| handle_menu(app, event.id().as_ref()))
         .build(app)?;
@@ -60,34 +69,59 @@ fn handle_menu(app: &AppHandle, id: &str) {
     match id {
         "show" => toggle_window(app, true),
         "quit" => app.exit(0),
+
         "toggle_floating" => {
             prefs.floating_window = !prefs.floating_window;
             toggle_window(app, prefs.floating_window);
-            config::save(app, &prefs);
+            persist_and_sync(app, &prefs);
         }
+
         "toggle_on_top" => {
             prefs.always_on_top = !prefs.always_on_top;
             if let Some(w) = app.get_webview_window("monitor") {
                 let _ = w.set_always_on_top(prefs.always_on_top);
             }
-            config::save(app, &prefs);
+            persist_and_sync(app, &prefs);
         }
-        // TODO(claude-code): cablear auto_hide (mostrar/ocultar segun
-        // store.attention_count()), compact (emitir un flag al frontend) y
-        // at_login (tauri-plugin-autostart enable/disable).
+
         "toggle_auto_hide" => {
             prefs.auto_hide = !prefs.auto_hide;
-            config::save(app, &prefs);
+            // Aplica la nueva preferencia de inmediato segun el estado actual.
+            if let Some(store) = app.try_state::<std::sync::Arc<crate::state::Store>>() {
+                let attention = store.attention_count();
+                refresh::apply_auto_hide(app, &prefs, attention);
+            }
+            persist_and_sync(app, &prefs);
         }
+
         "toggle_compact" => {
             prefs.compact = !prefs.compact;
-            config::save(app, &prefs);
+            // Notifica al frontend para que aplique/quite la clase .compact.
+            let _ = app.emit("prefs", &prefs);
+            persist_and_sync(app, &prefs);
         }
+
         "toggle_at_login" => {
             prefs.open_at_login = !prefs.open_at_login;
-            config::save(app, &prefs);
+            // Delega en el plugin de autostart (ManagerExt::autolaunch()).
+            let manager = app.autolaunch();
+            if prefs.open_at_login {
+                let _ = manager.enable();
+            } else {
+                let _ = manager.disable();
+            }
+            persist_and_sync(app, &prefs);
         }
+
         _ => {}
+    }
+}
+
+/// Persiste las prefs en disco y actualiza el managed state (PrefsState).
+fn persist_and_sync(app: &AppHandle, prefs: &config::Prefs) {
+    config::save(app, prefs);
+    if let Some(state) = app.try_state::<PrefsState>() {
+        *state.0.lock().unwrap() = prefs.clone();
     }
 }
 

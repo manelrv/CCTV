@@ -1,3 +1,12 @@
+/** Espejo TS de config::Prefs en Rust. Serializado por serde con snake_case. */
+export interface Prefs {
+  floating_window: boolean;
+  always_on_top: boolean;
+  auto_hide: boolean;
+  compact: boolean;
+  open_at_login: boolean;
+}
+
 export type InstanceState =
   | "working"
   | "waiting_permission"
