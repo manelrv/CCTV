@@ -176,6 +176,46 @@ Chronological log of work completed. Format: date + phase + concise bullets.
 - **Test count**: 19 → 30 (+11: 4 state tests, 7 transcript tests).
 - **Dev dependency added**: `tempfile = "3"` for `.jsonl` fixture files in transcript tests.
 
+### Desktop notifications on attention transition
+
+- **What**: fires one native OS notification per instance the moment it enters
+  `WaitingPermission` or `WaitingInput`. Does NOT spam — a session that stays
+  in attention across multiple refreshes only notifies once.
+- **Plugin**: `tauri-plugin-notification = "2"` (crate: `tauri-plugin-notification v2.3.3`,
+  uses `notify-rust` + `mac-notification-sys` on macOS). Registered via
+  `tauri_plugin_notification::init()` in `main.rs`. Capability entry
+  `"notification:default"` added to `capabilities/default.json`.
+- **Transition detection** (`refresh.rs`):
+  - `AttentionState(Mutex<HashSet<String>>)` — managed state tracking the set of
+    session_ids currently in attention.
+  - `newly_attention(prev, current) -> Vec<String>` — pure diff function; returns
+    ids in `current` but not in `prev`. Unit-tested (4 new tests).
+  - On each `refresh()` call: build current set from snapshot, diff vs stored,
+    notify new entries, replace stored with current.
+- **Notification content**: title = `instance.project` (e.g. `~/dev/CCTV`);
+  body = `instance.detail` if present, else localized fallback from `i18n.rs`
+  (`notif_permission` / `notif_input`).
+- **i18n**: two new strings in `TrayStrings` for all 8 languages (en/es/pt/de/fr/it/ca/ru).
+- **Threading**: dispatched via `run_on_main_thread` — same precaution as
+  `set_panel_visible`. Apple recommends main-thread access for
+  `UNUserNotificationCenter`; the SIGTRAP lesson from NSPanel applies.
+- **First-launch behavior**: instances already in attention when the app starts
+  ARE notified on first refresh. Decision: the user just opened the app;
+  knowing what is pending immediately is the right behavior.
+- **Test count**: 30 → 34 (+4 `newly_attention` tests).
+- **GOTCHA (verified by elimination)**: macOS silently drops notifications from
+  non-bundled binaries — the `tauri dev` raw binary gets `Ok()` from `show()`,
+  no permission prompt, nothing shown, no error anywhere. Only the bundled
+  `.app` (`npm run tauri build` → `target/release/bundle/macos/CCTV.app`)
+  prompts for permission and actually notifies. Verified live with the bundle.
+- **Testing trick**: fake hooks via curl to `/hooks/notification/permission`
+  with an arbitrary session_id force attention transitions end-to-end without
+  real sessions.
+
+### Readable elapsed times
+
+- Times ≥60 min render as "17h 18m" instead of unreadable "1038:19" (`InstanceRow`).
+
 ---
 
-_Final verification: `cargo check` 0 errors · `cargo test` 30/30 · `tsc --noEmit` 0 errors · `npm run build` clean._
+_Final verification: `cargo check` 0 errors · `cargo test` 34/34 · `tsc --noEmit` 0 errors · `npm run build` clean._

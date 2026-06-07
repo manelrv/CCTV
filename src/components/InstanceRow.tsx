@@ -5,6 +5,11 @@ import { STATE_CLASS, STATE_I18N_KEY, formatTokens } from "../types";
 function timeInState(lastEventAt: number, now: number): string {
   const secs = Math.max(0, now - lastEventAt);
   const m = Math.floor(secs / 60);
+  // From one hour up, mm:ss becomes unreadable (1038:19) — switch to "17h 18m".
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }

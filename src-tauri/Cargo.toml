@@ -21,6 +21,7 @@ notify = "6"
 dirs = "5"
 
 tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
 
 [dev-dependencies]
 # Used in transcript.rs unit tests to create temporary .jsonl fixture files.

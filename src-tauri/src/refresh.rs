@@ -3,9 +3,12 @@
 //! and the reaper in main.rs. See docs/ARCHITECTURE.md#pushing-state-to-the-webview.
 
 use crate::config::Prefs;
-use crate::state::Store;
+use crate::i18n;
+use crate::state::{Instance, InstanceState, Store};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, image::Image};
+use tauri_plugin_notification::NotificationExt;
 
 // Calm icon: no instance is demanding user attention.
 const ICON_CALM: &[u8] = include_bytes!("../../icons/tray-calm-64.png");
@@ -34,8 +37,28 @@ pub fn tray_variant(attention: usize) -> TrayVariant {
 #[derive(Default)]
 pub struct PrefsState(pub Mutex<Prefs>);
 
-/// Emits the snapshot to the webview, updates the tray icon, and applies
-/// auto-show/hide according to current preferences.
+/// Tracks which session_ids are currently in an attention state (WaitingPermission
+/// or WaitingInput). Used by refresh() to detect transitions and fire one
+/// notification per new entry.
+#[derive(Default)]
+pub struct AttentionState(pub Mutex<HashSet<String>>);
+
+/// Returns session_ids that are in `current` but NOT in `prev`.
+/// These are the IDs that just entered attention — each gets one notification.
+///
+/// Note: an id that leaves attention and then re-enters WILL re-notify
+/// (it disappears from prev when it leaves, so the next entry is "new").
+///
+/// Design decision: instances that are ALREADY in attention when the app
+/// first starts ARE notified. This is intentional — the user just launched
+/// the app and needs to know what is pending immediately.
+pub fn newly_attention(prev: &HashSet<String>, current: &HashSet<String>) -> Vec<String> {
+    current.difference(prev).cloned().collect()
+}
+
+/// Emits the snapshot to the webview, updates the tray icon, applies
+/// auto-show/hide according to current preferences, and fires one desktop
+/// notification per session that newly enters an attention state.
 ///
 /// This function is the ONLY state emission point. It must be fast: no
 /// disk I/O (prefs come from managed state).
@@ -69,6 +92,51 @@ pub fn refresh(app: &AppHandle, store: &Arc<Store>) {
     if let Some(prefs_state) = app.try_state::<PrefsState>() {
         let prefs = prefs_state.0.lock().unwrap().clone();
         apply_auto_hide(app, &prefs, attention);
+    }
+
+    // 4. Desktop notifications for newly-entered attention instances.
+    if let Some(attn_state) = app.try_state::<AttentionState>() {
+        let current: HashSet<String> = snapshot
+            .iter()
+            .filter(|i| i.state.needs_attention())
+            .map(|i| i.session_id.clone())
+            .collect();
+
+        let to_notify: Vec<(String, Instance)> = {
+            let prev = attn_state.0.lock().unwrap();
+            newly_attention(&prev, &current)
+                .into_iter()
+                .filter_map(|id| {
+                    snapshot.iter().find(|i| i.session_id == id).map(|i| (id, i.clone()))
+                })
+                .collect()
+        };
+
+        // Update the stored set after releasing the lock above.
+        *attn_state.0.lock().unwrap() = current;
+
+        if !to_notify.is_empty() {
+            let lang = i18n::Lang::detect();
+            let strings = i18n::strings(lang);
+            let app2 = app.clone();
+            // Threading note: tauri-plugin-notification uses notify-rust on macOS,
+            // which calls UNUserNotificationCenter. Apple recommends main-thread calls
+            // for UNUserNotificationCenter. We dispatch via run_on_main_thread as the
+            // same precaution we already apply for NSPanel (SIGTRAP lesson from phase 5).
+            let _ = app.run_on_main_thread(move || {
+                for (_, inst) in to_notify {
+                    let body = inst.detail.as_deref().unwrap_or(match inst.state {
+                        InstanceState::WaitingPermission => strings.notif_permission,
+                        _ => strings.notif_input,
+                    });
+                    if let Err(e) =
+                        app2.notification().builder().title(&inst.project).body(body).show()
+                    {
+                        eprintln!("[notify] failed to show notification: {e}");
+                    }
+                }
+            });
+        }
     }
 }
 
@@ -127,6 +195,52 @@ pub fn set_panel_visible(app: &AppHandle, visible: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ids(v: &[&str]) -> HashSet<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn sorted(mut v: Vec<String>) -> Vec<String> {
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn newly_attention_detects_new_id() {
+        let prev = ids(&["a"]);
+        let current = ids(&["a", "b"]);
+        assert_eq!(sorted(newly_attention(&prev, &current)), vec!["b"]);
+    }
+
+    #[test]
+    fn newly_attention_does_not_re_notify_persisting_id() {
+        let prev = ids(&["a"]);
+        let current = ids(&["a"]);
+        assert!(newly_attention(&prev, &current).is_empty());
+    }
+
+    #[test]
+    fn newly_attention_re_notifies_id_that_left_and_returned() {
+        // First cycle: "a" enters — notified.
+        let prev = ids(&[]);
+        let current1 = ids(&["a"]);
+        assert_eq!(newly_attention(&prev, &current1), vec!["a"]);
+
+        // Second cycle: "a" leaves attention.
+        let current2 = ids(&[]);
+        assert!(newly_attention(&current1, &current2).is_empty());
+
+        // Third cycle: "a" re-enters — must be notified again.
+        let current3 = ids(&["a"]);
+        assert_eq!(newly_attention(&current2, &current3), vec!["a"]);
+    }
+
+    #[test]
+    fn newly_attention_empty_prev_notifies_all_current() {
+        let prev = ids(&[]);
+        let current = ids(&["x", "y"]);
+        assert_eq!(sorted(newly_attention(&prev, &current)), vec!["x", "y"]);
+    }
 
     #[test]
     fn tray_variant_calm_when_zero() {

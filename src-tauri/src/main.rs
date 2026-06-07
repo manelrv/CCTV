@@ -31,6 +31,7 @@ fn main() {
     // Build the plugin chain. tauri-nspanel must be registered before setup()
     // so its WebviewPanelManager is available when to_panel() is called.
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -42,6 +43,7 @@ fn main() {
     builder
         .manage(store.clone())
         .manage(prefs_state)
+        .manage(refresh::AttentionState::default())
         .setup({
             let store = store.clone();
             move |app| {

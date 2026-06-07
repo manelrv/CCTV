@@ -43,6 +43,10 @@ pub struct TrayStrings {
     pub compact_mode: &'static str,
     pub open_at_login: &'static str,
     pub quit: &'static str,
+    /// Notification body when an instance enters WaitingPermission.
+    pub notif_permission: &'static str,
+    /// Notification body when an instance enters WaitingInput.
+    pub notif_input: &'static str,
 }
 
 pub fn strings(lang: Lang) -> TrayStrings {
@@ -55,6 +59,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Modo compacto",
             open_at_login: "Abrir al iniciar sesión",
             quit: "Salir",
+            notif_permission: "Esperando tu aprobación",
+            notif_input: "Esperando tu respuesta",
         },
         Lang::Pt => TrayStrings {
             show_window: "Mostrar janela",
@@ -64,6 +70,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Modo compacto",
             open_at_login: "Abrir ao iniciar sessão",
             quit: "Sair",
+            notif_permission: "Aguardando sua aprovação",
+            notif_input: "Aguardando sua resposta",
         },
         Lang::De => TrayStrings {
             show_window: "Fenster anzeigen",
@@ -73,6 +81,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Kompaktmodus",
             open_at_login: "Beim Anmelden öffnen",
             quit: "Beenden",
+            notif_permission: "Wartet auf deine Genehmigung",
+            notif_input: "Wartet auf deine Antwort",
         },
         Lang::Fr => TrayStrings {
             show_window: "Afficher la fenêtre",
@@ -82,6 +92,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Mode compact",
             open_at_login: "Ouvrir à la connexion",
             quit: "Quitter",
+            notif_permission: "En attente de votre approbation",
+            notif_input: "En attente de votre réponse",
         },
         Lang::It => TrayStrings {
             show_window: "Mostra finestra",
@@ -91,6 +103,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Modalità compatta",
             open_at_login: "Apri all'accesso",
             quit: "Esci",
+            notif_permission: "In attesa della tua approvazione",
+            notif_input: "In attesa della tua risposta",
         },
         Lang::Ca => TrayStrings {
             show_window: "Mostra la finestra",
@@ -100,6 +114,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Mode compacte",
             open_at_login: "Obre en iniciar sessió",
             quit: "Surt",
+            notif_permission: "Esperant la teva aprovació",
+            notif_input: "Esperant la teva resposta",
         },
         Lang::Ru => TrayStrings {
             show_window: "Показать окно",
@@ -109,6 +125,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Компактный режим",
             open_at_login: "Открывать при входе",
             quit: "Выйти",
+            notif_permission: "Ожидает вашего разрешения",
+            notif_input: "Ожидает вашего ответа",
         },
         // English is the fallback.
         Lang::En => TrayStrings {
@@ -119,6 +137,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             compact_mode: "Compact mode",
             open_at_login: "Open at login",
             quit: "Quit",
+            notif_permission: "Waiting for your approval",
+            notif_input: "Waiting for your input",
         },
     }
 }

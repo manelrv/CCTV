@@ -102,10 +102,16 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
       Slug rule (empirically verified): replace every `/` in cwd with `-`.
       New module: `transcript.rs` (11 new Rust tests; total: 30).
 
+## Extras (continued)
+- [x] Desktop notification when an instance enters `WaitingPermission` or `WaitingInput`.
+      `tauri-plugin-notification` (Rust side). One notification per transition, no spam.
+      `AttentionState` managed state + `newly_attention()` pure diff. Dispatched via
+      `run_on_main_thread` (UNUserNotificationCenter requires it on macOS).
+      i18n: `notif_permission` / `notif_input` in all 8 languages.
+      4 new tests (34 total).
+
 ## Ideas / backlog
 - Click on a row → bring that terminal to the foreground (difficult cross-platform) or
   copy the `cwd`.
 - Session time history (SQLite) for metrics.
-- Desktop notification when transitioning to `WaitingPermission` (via the hook's own
-  `terminalSequence`, or native app notification).
 - Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.

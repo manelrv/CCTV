@@ -42,9 +42,15 @@ are managed by the supervisor files lifecycle).
   RFC3339 → epoch secs without chrono: manual parser.
 - `refresh.rs` — centralized state propagation. `refresh(app, store)` is the
   ONLY emission point: emits snapshot to the webview, updates the system tray
-  icon/title (calm/alert based on `attention_count()`), and applies auto-hide/show
-  using `PrefsState` (managed state, no I/O). Also exports `apply_auto_hide()` and
-  `tray_variant()` (testable without Tauri runtime).
+  icon/title (calm/alert based on `attention_count()`), applies auto-hide/show
+  using `PrefsState` (managed state, no I/O), and fires one desktop notification
+  per session that newly enters `WaitingPermission` or `WaitingInput`. Transition
+  detection uses `AttentionState` (managed `Mutex<HashSet<String>>`): the diff
+  between the previous and current attention sets is computed by `newly_attention()`
+  (pure function, unit-tested). Notifications are dispatched via `run_on_main_thread`
+  (same precaution as `set_panel_visible`) because `UNUserNotificationCenter` on
+  macOS expects main-thread calls. Also exports `apply_auto_hide()`, `tray_variant()`,
+  and `newly_attention()` (all testable without Tauri runtime).
 - `tray.rs` — system tray icon + preferences menu. All toggles wired up: floating,
   always_on_top, auto_hide, compact (emits "prefs" event to the frontend), open_at_login
   (via `tauri-plugin-autostart`). `persist_and_sync()` updates disk + managed state.
