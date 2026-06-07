@@ -5,21 +5,29 @@
 use crate::hooks::{summarize_detail, HookPayload};
 use crate::refresh;
 use crate::state::{InstanceState, Store};
+use crate::transcript;
 use axum::{
     extract::State,
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 
 pub const BIND_ADDR: &str = "127.0.0.1:8787";
+
+/// Minimum seconds between transcript reads per session.
+/// Avoids reading potentially large files on every hook event.
+const TRANSCRIPT_THROTTLE_SECS: u64 = 10;
 
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<Store>,
     pub app: AppHandle,
+    /// Throttle map: session_id -> epoch secs of last transcript read.
+    pub transcript_last_read: Arc<Mutex<HashMap<String, u64>>>,
 }
 
 pub async fn serve(state: AppState) {
@@ -55,6 +63,37 @@ fn emit(state: &AppState) {
     refresh::refresh(&state.app, &state.store);
 }
 
+/// Spawns a background task that reads context tokens from a transcript.
+/// Throttled per session to at most once every TRANSCRIPT_THROTTLE_SECS.
+/// The handler has already responded 200 before this is called — no latency added.
+fn spawn_transcript_read(s: AppState, session_id: String, transcript_path: Option<String>) {
+    let Some(path) = transcript_path else { return };
+    tauri::async_runtime::spawn(async move {
+        // Throttle check
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        {
+            let mut map = s.transcript_last_read.lock().unwrap();
+            if let Some(&last) = map.get(&session_id) {
+                if now.saturating_sub(last) < TRANSCRIPT_THROTTLE_SECS {
+                    return;
+                }
+            }
+            map.insert(session_id.clone(), now);
+        }
+
+        // Read tokens from transcript (blocking I/O in async context is acceptable here:
+        // the file is read once every 10s per session and it is < 256 KiB of tail).
+        if let Some(tokens) = transcript::read_context_tokens(std::path::Path::new(&path)) {
+            if s.store.set_context_tokens(&session_id, tokens) {
+                refresh::refresh(&s.app, &s.store);
+            }
+        }
+    });
+}
+
 async fn debug_snapshot(State(s): State<AppState>) -> Json<Vec<crate::state::Instance>> {
     Json(s.store.snapshot())
 }
@@ -67,6 +106,7 @@ async fn session_start(State(s): State<AppState>, Json(p): Json<HookPayload>) ->
     if let Some(id) = sid(&p) {
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Idle, None);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }
@@ -83,6 +123,7 @@ async fn user_prompt(State(s): State<AppState>, Json(p): Json<HookPayload>) -> S
     if let Some(id) = sid(&p) {
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Working, None);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }
@@ -92,6 +133,7 @@ async fn tool_activity(State(s): State<AppState>, Json(p): Json<HookPayload>) ->
         let detail = summarize_detail(&p);
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Working, detail);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }
@@ -102,6 +144,7 @@ async fn notif_permission(State(s): State<AppState>, Json(p): Json<HookPayload>)
         s.store
             .apply(&id, p.cwd.as_deref(), InstanceState::WaitingPermission, detail);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }
@@ -111,6 +154,7 @@ async fn notif_idle(State(s): State<AppState>, Json(p): Json<HookPayload>) -> St
         s.store
             .apply(&id, p.cwd.as_deref(), InstanceState::WaitingInput, None);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }
@@ -119,6 +163,7 @@ async fn stop(State(s): State<AppState>, Json(p): Json<HookPayload>) -> StatusCo
     if let Some(id) = sid(&p) {
         s.store.apply(&id, p.cwd.as_deref(), InstanceState::Idle, None);
         emit(&s);
+        spawn_transcript_read(s, id, p.transcript_path);
     }
     StatusCode::OK
 }

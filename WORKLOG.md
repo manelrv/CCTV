@@ -145,6 +145,37 @@ Chronological log of work completed. Format: date + phase + concise bullets.
 - Recent completions stay visible (useful feedback); 4 new tests (19 total).
 - Verified live: store went from 8 instances (7 fossils) to the 2 real ones.
 
+### Context occupancy label per row
+
+- **What**: Each instance row now shows a muted monospace token count (e.g. `304k`)
+  next to the elapsed time, reflecting the current context window occupancy.
+- **Why**: Lets users know at a glance how full each session's context is, without
+  opening a terminal.
+- **Slug rule (empirically verified)**: Claude Code derives the transcript directory slug
+  from the cwd by replacing every `/` with `-`. Since cwd is always absolute (starts with
+  `/`), the slug starts with `-`. No dots are introduced.
+  Example: `/Users/manelrv/side-projects/CCTV/src-tauri` →
+  `-Users-manelrv-side-projects-CCTV-src-tauri`. Verified by cross-checking
+  `~/.claude/jobs/be4c186b/state.json` (cwd) against
+  `~/.claude/projects/-Users-manelrv-side-projects-CCTV-src-tauri/be4c186b-…-….jsonl`.
+- **Token formula**: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
+  from the last JSON line with a `message.usage` field. Observed example: 2 + 37545 + 10027 = 47574.
+- **New module**: `src-tauri/src/transcript.rs` — `cwd_to_slug`, `transcript_path`,
+  `read_context_tokens` (seeks to last 256 KiB, skip first partial line, scan for last usage).
+- **Background jobs** (`jobs.rs`): tokens read synchronously in `scan()` (runs on its own
+  thread; small job count).
+- **Foreground hooks** (`server.rs`): tokens read in a throttled `spawn_transcript_read`
+  (at most once per session per 10 s). The handler responds 200 immediately; the spawn
+  happens after.
+- **State**: `Instance` gains `context_tokens: Option<u64>` (serialized; None → null).
+  `Store::set_context_tokens` updates the value without touching `last_event_at`. `apply()`
+  does not clobber an existing value on re-entry.
+- **Frontend**: `Instance.context_tokens: number | null`; `formatTokens` helper in
+  `types.ts` (<1000 → as-is, ≥1000 → `Math.round(n/1000)+"k"`); `.ctx-tokens` CSS class
+  (10px mono, `--text-faint`, 0.7 opacity); visible in both normal and compact modes.
+- **Test count**: 19 → 30 (+11: 4 state tests, 7 transcript tests).
+- **Dev dependency added**: `tempfile = "3"` for `.jsonl` fixture files in transcript tests.
+
 ---
 
-_Final verification: `cargo check` 0 errors · `cargo test` 19/19 · `tsc --noEmit` 0 errors · `npm run build` clean. Float over fullscreen verified live._
+_Final verification: `cargo check` 0 errors · `cargo test` 30/30 · `tsc --noEmit` 0 errors · `npm run build` clean._

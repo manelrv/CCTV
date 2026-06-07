@@ -10,6 +10,9 @@ pub struct HookPayload {
     pub cwd: Option<String>,
     pub hook_event_name: Option<String>,
 
+    // Path to the .jsonl conversation transcript for this session.
+    pub transcript_path: Option<String>,
+
     // Tool events
     pub tool_name: Option<String>,
     pub tool_input: Option<serde_json::Value>,

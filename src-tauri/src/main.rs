@@ -10,6 +10,7 @@ mod macos;
 mod refresh;
 mod server;
 mod state;
+mod transcript;
 mod tray;
 
 use std::sync::Arc;
@@ -69,6 +70,9 @@ fn main() {
                 let app_state = server::AppState {
                     store: store.clone(),
                     app: handle.clone(),
+                    transcript_last_read: std::sync::Arc::new(std::sync::Mutex::new(
+                        std::collections::HashMap::new(),
+                    )),
                 };
                 tauri::async_runtime::spawn(server::serve(app_state));
 

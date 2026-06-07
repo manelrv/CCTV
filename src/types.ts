@@ -27,6 +27,18 @@ export interface Instance {
   source: Source;
   started_at: number; // epoch secs
   last_event_at: number; // epoch secs
+  /** Sum of input + cache_read + cache_creation tokens from the last assistant message. */
+  context_tokens: number | null;
+}
+
+/**
+ * Formats a raw token count into a compact label.
+ * < 1000 → as-is (e.g. "42")
+ * ≥ 1000 → rounded to nearest k (e.g. "304k")
+ */
+export function formatTokens(n: number): string {
+  if (n < 1000) return String(n);
+  return `${Math.round(n / 1000)}k`;
 }
 
 // Translation keys for each state (resolved via t() in the component).

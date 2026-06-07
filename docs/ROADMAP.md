@@ -94,6 +94,14 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
 - [ ] Windows: build and test.
 - [ ] Packaging: `.dmg` / `.AppImage`+`.deb` / `.msi`.
 
+## Extras
+- [x] Context occupancy label per row: reads `~/.claude/projects/<slug>/<session_id>.jsonl`,
+      extracts `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from
+      the last assistant message, and renders a muted `304k` label next to the elapsed time.
+      Background jobs: read on every scan. Foreground hooks: throttled async read (10 s / session).
+      Slug rule (empirically verified): replace every `/` in cwd with `-`.
+      New module: `transcript.rs` (11 new Rust tests; total: 30).
+
 ## Ideas / backlog
 - Click on a row → bring that terminal to the foreground (difficult cross-platform) or
   copy the `cwd`.

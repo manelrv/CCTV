@@ -51,6 +51,15 @@ are managed by the supervisor files lifecycle).
 - `config.rs` — preferences persistence. `load_from_path()` and
   `default_prefs_path()` allow initializing `PrefsState` before setup().
 - `hooks.rs` — serde types for the payloads.
+- `transcript.rs` — reads context token occupancy from Claude Code transcript files
+  (`~/.claude/projects/<slug>/<session_id>.jsonl`). Exports `cwd_to_slug` (replaces
+  every `/` in a cwd with `-`; verified empirically against real projects), `transcript_path`
+  (derives the full path from cwd + session_id), and `read_context_tokens` (seeks to the
+  last 256 KiB, skips the first partial line, scans for the last `message.usage` block, and
+  returns `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`). All I/O
+  errors return `None`. Used by `jobs.rs` (synchronous, during scan) and `server.rs`
+  (throttled async spawn, at most once per session per 10 s, after the handler has already
+  responded 200).
 
 ## Frontend (src)
 

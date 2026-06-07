@@ -23,6 +23,7 @@
 
 use crate::refresh;
 use crate::state::{project_from_cwd, Instance, InstanceState, Source, Store};
+use crate::transcript;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -203,6 +204,12 @@ fn scan() -> Vec<Instance> {
             continue;
         }
 
+        // Read context tokens directly: scan runs on its own thread and the job
+        // count is small, so a synchronous file read here is fine.
+        let context_tokens = transcript::transcript_path(&cwd, &id)
+            .as_deref()
+            .and_then(transcript::read_context_tokens);
+
         out.push(Instance {
             session_id: id,
             project: project_from_cwd(&cwd),
@@ -212,6 +219,7 @@ fn scan() -> Vec<Instance> {
             source: Source::Background,
             started_at,
             last_event_at,
+            context_tokens,
         });
     }
     out

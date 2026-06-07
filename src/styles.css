@@ -146,10 +146,23 @@ body {
   font-size: 11px;
   font-weight: 500;
 }
+.time-tokens {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
 .time {
   font-size: 11px;
   color: var(--text-faint);
   font-family: var(--mono);
+}
+/* Context occupancy label: muted monospace, never intrusive. */
+.ctx-tokens {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text-faint);
+  opacity: 0.7;
 }
 
 /* State colors: tint the dot, the label, and the row background when attention is needed. */

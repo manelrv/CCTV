@@ -71,6 +71,9 @@ pub struct Instance {
     pub source: Source,
     pub started_at: u64,
     pub last_event_at: u64,
+    /// Sum of input_tokens + cache_read_input_tokens + cache_creation_input_tokens
+    /// from the last assistant message in the transcript. None until first read.
+    pub context_tokens: Option<u64>,
 }
 
 #[derive(Default)]
@@ -135,6 +138,7 @@ impl Store {
             source: Source::Foreground,
             started_at: ts,
             last_event_at: ts,
+            context_tokens: None,
         });
         if !cwd.is_empty() {
             entry.cwd = cwd.clone();
@@ -149,6 +153,20 @@ impl Store {
 
     pub fn remove(&self, session_id: &str) {
         self.inner.lock().unwrap().remove(session_id);
+    }
+
+    /// Updates the context_tokens field for an existing instance.
+    /// Does NOT touch last_event_at (a transcript read is not a session event).
+    /// Returns true if the instance existed and the value changed, false otherwise.
+    pub fn set_context_tokens(&self, session_id: &str, tokens: u64) -> bool {
+        let mut map = self.inner.lock().unwrap();
+        if let Some(inst) = map.get_mut(session_id) {
+            if inst.context_tokens != Some(tokens) {
+                inst.context_tokens = Some(tokens);
+                return true;
+            }
+        }
+        false
     }
 
     /// Replaces the full set of background instances (Source A). "Background wins"
@@ -252,6 +270,7 @@ mod tests {
             source,
             started_at: ts,
             last_event_at: ts,
+            context_tokens: None,
         }
     }
 
@@ -371,5 +390,42 @@ mod tests {
         assert_eq!(project_from_cwd_with_home("", HOME), "");
         assert_eq!(project_from_cwd_with_home("/Users/x/", HOME), "~");
         assert_eq!(project_from_cwd_with_home("relative/path", None), "relative/path");
+    }
+
+    #[test]
+    fn set_context_tokens_updates_existing_instance() {
+        let store = Store::default();
+        insert(&store, mk("s1", Source::Foreground, InstanceState::Working, 0));
+        // First call: was None, now 42000 → changed = true
+        assert!(store.set_context_tokens("s1", 42000));
+        let tokens = store.inner.lock().unwrap().get("s1").unwrap().context_tokens;
+        assert_eq!(tokens, Some(42000));
+    }
+
+    #[test]
+    fn set_context_tokens_returns_false_when_unchanged() {
+        let store = Store::default();
+        insert(&store, mk("s1", Source::Foreground, InstanceState::Working, 0));
+        store.set_context_tokens("s1", 42000);
+        // Same value again → unchanged = false
+        assert!(!store.set_context_tokens("s1", 42000));
+    }
+
+    #[test]
+    fn set_context_tokens_returns_false_for_unknown_session() {
+        let store = Store::default();
+        assert!(!store.set_context_tokens("nonexistent", 100));
+    }
+
+    #[test]
+    fn apply_does_not_clobber_existing_context_tokens() {
+        let store = Store::default();
+        // Insert via apply (context_tokens starts as None)
+        store.apply("s1", Some("/tmp/s1"), InstanceState::Working, None);
+        store.set_context_tokens("s1", 99999);
+        // A subsequent apply (e.g. next hook event) must NOT reset context_tokens
+        store.apply("s1", Some("/tmp/s1"), InstanceState::Working, None);
+        let tokens = store.inner.lock().unwrap().get("s1").unwrap().context_tokens;
+        assert_eq!(tokens, Some(99999));
     }
 }

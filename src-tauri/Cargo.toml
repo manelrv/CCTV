@@ -22,6 +22,10 @@ dirs = "5"
 
 tauri-plugin-autostart = "2"
 
+[dev-dependencies]
+# Used in transcript.rs unit tests to create temporary .jsonl fixture files.
+tempfile = "3"
+
 # NSPanel plugin: converts the monitor window into an NSPanel subclass so it
 # can float above fullscreen spaces. Plain NSWindow + FullScreenAuxiliary +
 # high level was empirically proven insufficient on macOS (window disappears
