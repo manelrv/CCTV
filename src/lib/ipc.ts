@@ -32,6 +32,9 @@ export async function fetchPrefs(): Promise<Prefs> {
       auto_hide: false,
       compact: false,
       open_at_login: true,
+      opacity: 92,
+      theme: "system",
     };
   }
 }
+

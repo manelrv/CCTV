@@ -104,7 +104,12 @@ fn main() {
             }
         })
         // Commands the frontend uses to fetch the snapshot and prefs on mount.
-        .invoke_handler(tauri::generate_handler![get_instances, get_prefs, focus_session])
+        .invoke_handler(tauri::generate_handler![
+            get_instances,
+            get_prefs,
+            focus_session,
+            resize_monitor
+        ])
         .build(tauri::generate_context!())
         .expect("error building the Tauri app")
         .run(|_app, event| {
@@ -125,6 +130,29 @@ fn get_instances(state: tauri::State<'_, Arc<state::Store>>) -> Vec<state::Insta
 #[tauri::command]
 fn get_prefs(state: tauri::State<'_, refresh::PrefsState>) -> config::Prefs {
     state.0.lock().unwrap().clone()
+}
+
+/// Resizes the monitor window to `height` logical px, keeping the top edge fixed.
+/// Needed because set_size() is a no-op on frameless (decorations:false) macOS
+/// windows (tauri#11975). The actual resize runs on the main thread (AppKit).
+#[tauri::command]
+fn resize_monitor(height: f64, app: tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(w) = app2.get_webview_window("monitor") {
+                macos::resize_window_keep_top(&w, height);
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Other platforms: set_size works on frameless windows.
+        if let Some(w) = app.get_webview_window("monitor") {
+            let _ = w.set_size(tauri::LogicalSize::new(360.0, height));
+        }
+    }
 }
 
 /// Attempts to focus the terminal window/tab hosting the given session.

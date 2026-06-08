@@ -261,6 +261,8 @@ mod tests {
             auto_hide: true,
             compact: true,
             open_at_login: false,
+            opacity: 75,
+            theme: "dark".to_string(),
         };
         let json = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
@@ -269,6 +271,8 @@ mod tests {
         assert!(back.auto_hide);
         assert!(back.compact);
         assert!(!back.open_at_login);
+        assert_eq!(back.opacity, 75);
+        assert_eq!(back.theme, "dark");
     }
 
     #[test]
@@ -279,5 +283,16 @@ mod tests {
         assert!(!prefs.auto_hide);
         assert!(!prefs.compact);
         assert!(prefs.open_at_login);
+        assert_eq!(prefs.opacity, 92);
+        assert_eq!(prefs.theme, "system");
+    }
+
+    #[test]
+    fn prefs_serde_defaults_for_missing_fields() {
+        // Old prefs.json without opacity/theme: new fields must deserialize to defaults.
+        let json = r#"{"floating_window":true,"always_on_top":true,"auto_hide":false,"compact":false,"open_at_login":true}"#;
+        let back: Prefs = serde_json::from_str(json).unwrap();
+        assert_eq!(back.opacity, 92);
+        assert_eq!(back.theme, "system");
     }
 }

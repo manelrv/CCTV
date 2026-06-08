@@ -127,6 +127,20 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
       Terminal env captured by `hooks/session-env.sh` (command-type hook) on
       `SessionStart` and `UserPromptSubmit`. Stored in `Instance.terminal: Option<TerminalRef>`.
 
+## Extras (continued)
+- [x] Tray submenus for theme and opacity (replaces the Preferences window).
+  - Theme submenu: System / Dark / Light as CheckMenuItems. Check mark follows active theme.
+  - Opacity submenu: presets 100% / 90% / 80% / 70% / 60% / 50%. Check mark on nearest preset.
+  - Both submenus emit "prefs" and rebuild the menu on change so check marks stay accurate.
+  - Second window removed: `tauri.conf.json` has only the `monitor` window; `Preferences.tsx`
+    deleted; `main.tsx` always renders `<App/>`. `set_opacity`/`set_theme` Tauri commands removed.
+  - `ipc.ts`: `setOpacity` / `setTheme` exports removed (no longer called from JS).
+  - i18n.rs: `preferences` field replaced by `theme`, `theme_system`, `theme_dark`,
+    `theme_light`, `opacity` in all 8 languages. Frontend `preferences.*` keys removed from all 8 locales.
+  - `Prefs.opacity` / `Prefs.theme` remain; the "prefs" event flow to MonitorWindow is unchanged.
+  - Light palette: `[data-theme="light"]` in `styles.css` — `rgba(242,242,247,alpha)`
+    bg, dark text, adjusted borders. Accent colors unchanged.
+
 ## Ideas / backlog
 - Session time history (SQLite) for metrics.
 - Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.

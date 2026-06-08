@@ -81,3 +81,41 @@ pub fn setup_panel(window: &WebviewWindow) {
             .into(),
     );
 }
+
+/// Resizes the monitor window to a new height, keeping its TOP edge fixed.
+///
+/// Why native: `WebviewWindow::set_size()` is a no-op on `decorations:false`
+/// windows on macOS (tauri#11975), which is exactly our frameless monitor.
+/// We set the NSWindow frame directly instead.
+///
+/// macOS frames are bottom-left origin: growing the height upward would move
+/// the visible top edge. To keep the top fixed we shift origin.y down by the
+/// height delta. Width is preserved.
+///
+/// Must run on the main thread (caller dispatches via run_on_main_thread).
+pub fn resize_window_keep_top(window: &WebviewWindow, height: f64) {
+    let raw = match window.ns_window() {
+        Ok(ptr) => ptr,
+        Err(e) => {
+            eprintln!("[macos] ns_window() failed: {e}");
+            return;
+        }
+    };
+    // Full paths: the tauri_panel! macro already imports NSWindow/NS* at module
+    // scope, so we qualify here to avoid name collisions.
+    // SAFETY: Tauri guarantees ns_window() returns a live NSWindow for as long
+    // as the WebviewWindow exists. Same cast pattern as tauri-runtime-wry.
+    let ns_window: &objc2_app_kit::NSWindow =
+        unsafe { &*raw.cast::<objc2_app_kit::NSWindow>() };
+
+    let frame = ns_window.frame();
+    let new_height = height.max(1.0);
+    // Keep the top edge fixed: top_y = origin.y + height is invariant.
+    let new_y = frame.origin.y + (frame.size.height - new_height);
+    let new_frame = objc2_foundation::NSRect::new(
+        objc2_foundation::NSPoint::new(frame.origin.x, new_y),
+        objc2_foundation::NSSize::new(frame.size.width, new_height),
+    );
+    // display:true repaints immediately.
+    unsafe { ns_window.setFrame_display(new_frame, true) };
+}

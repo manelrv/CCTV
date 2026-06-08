@@ -5,7 +5,13 @@ export interface Prefs {
   auto_hide: boolean;
   compact: boolean;
   open_at_login: boolean;
+  /** Panel background opacity in percent (30..=100). Default 92. */
+  opacity: number;
+  /** UI theme: "system" | "dark" | "light". Default "system". */
+  theme: string;
 }
+
+export type Theme = "system" | "dark" | "light";
 
 export type InstanceState =
   | "working"

@@ -9,6 +9,8 @@ const DEFAULT_PREFS: Prefs = {
   auto_hide: false,
   compact: false,
   open_at_login: true,
+  opacity: 92,
+  theme: "system",
 };
 
 export default function App() {
@@ -35,5 +37,13 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
-  return <MonitorWindow instances={instances} now={now} compact={prefs.compact} />;
+  return (
+    <MonitorWindow
+      instances={instances}
+      now={now}
+      compact={prefs.compact}
+      opacity={prefs.opacity}
+      theme={prefs.theme}
+    />
+  );
 }

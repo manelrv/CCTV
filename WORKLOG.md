@@ -328,6 +328,103 @@ Chronological log of work completed. Format: date + phase + concise bullets.
 - **Test count**: 38 → 47 (+9 `is_valid_focus_url` tests, +1 `set_terminal_focus_url_round_trips`).
 - **Verification**: `cargo check` 0 errors · `cargo test` 47/47 · `tsc --noEmit` 0 errors · `npm run build` clean.
 
+### Auto-resize window height to fit content
+
+- **What**: The floating window now auto-resizes its height to fit the number of
+  sessions instead of staying at a fixed 480 px with empty space below.
+- **Approach**: measurement-based (ResizeObserver on the root `.panel` div reads
+  `scrollHeight`). Bounds: min 120 px (titlebar + summary + empty placeholder),
+  max 600 px (rows beyond this scroll within the capped window via `overflow-y: auto`).
+- **Feedback-loop guard**: `lastSentHeight` ref — `setSize` is called only when the
+  clamped target differs from the last sent value. rAF debounce collapses multiple
+  observer callbacks per frame into one resize call. This prevents the classic
+  ResizeObserver→setSize→window resizes→observer fires again storm.
+- **CSS change**: `.panel` changed from `height: 100%` to `min-height: 100%` so
+  `scrollHeight` reflects natural content height, not the constrained OS-window height.
+  No other CSS changes were needed — `.list` already had `overflow-y: auto`.
+- **Effect deps**: `[instances, compact]` — re-measures on both list and layout changes.
+- **macOS NSPanel note**: `setSize` routes through Tauri's JS→IPC→main-thread path,
+  so it is safe; no change to panel config needed. Limitation: if the user
+  manually drags the window to a different height, auto-resize will re-apply on
+  the next instance-list change.
+- **Width**: constant at 360 px (matches `tauri.conf.json`); not modified.
+- **Files**: `src/components/MonitorWindow.tsx`, `src/styles.css`,
+  `docs/ARCHITECTURE.md`.
+- **Verification**: `tsc --noEmit` 0 errors · `npm run build` clean ·
+  `cargo check` 0 errors · `cargo test` 47/47 (no Rust changes).
+
+### Preferences window — opacity slider + theme selector
+
+- **What**: Dedicated preferences window opened from tray "Preferences…". Two controls:
+  opacity slider (30–100%) and theme selector (System / Dark / Light). Both persist to
+  `prefs.json` and apply live to the monitor window without restart.
+- **Second window** (`tauri.conf.json`): `label: "preferences"`, 320×240, `decorations: true`,
+  `resizable: false`, `alwaysOnTop: false`, `visible: false`. Normal OS settings dialog.
+- **Routing** (`main.tsx`): `getCurrentWindow().label === "preferences"` → render
+  `<Preferences/>`; else render existing `<App/>`. Both share the Vite dist.
+- **Prefs model** (`config.rs`):
+  - `opacity: u8` — percent 30..=100, default 92 (matches original `--bg` alpha).
+  - `theme: String` — "system" | "dark" | "light", default "system".
+  - Both use `#[serde(default = "...")]` helper fns so old `prefs.json` (missing fields)
+    deserializes to defaults. Backward-compatible.
+- **New Tauri commands** (`main.rs`): `set_opacity(u8)` (clamps to 30..=100) and
+  `set_theme(String)` (validates against allowed set). Both: update PrefsState, save to disk,
+  emit "prefs". `use tauri::Emitter` added (was missing — caught by `cargo check`).
+- **Tray** (`tray.rs`): "Preferences…" `MenuItemBuilder` item added before Quit (with separator).
+  Handler: `open_preferences_window()` → `get_webview_window("preferences").show() + set_focus()`.
+- **i18n** (`i18n.rs`): `preferences: &'static str` field added to `TrayStrings`; 8 translations.
+- **Frontend** (`Preferences.tsx`): range input (30–100) + 3 radio buttons. Invokes `setOpacity`
+  (debounced 80 ms) and `setTheme` (immediate). Loads current prefs on mount via `fetchPrefs`.
+- **Applying opacity** (`MonitorWindow.tsx` + `styles.css`):
+  - CSS: `--bg` changed from `rgba(28,28,30,0.92)` to `rgba(28,28,30,var(--panel-opacity))`.
+    `--panel-opacity: 0.92` as default.
+  - JS: `useEffect([opacity, theme])` sets `document.documentElement.style.setProperty("--panel-opacity", opacity/100)`.
+  - Only the panel background alpha changes. Text stays fully opaque.
+- **Applying theme** (`MonitorWindow.tsx` + `styles.css`):
+  - JS: `document.documentElement.setAttribute("data-theme", "dark"|"light")`.
+    `resolveTheme(theme, prefersDark)` helper: "dark"→dark, "light"→light, "system"→OS preference.
+  - "system": adds `matchMedia.addEventListener("change", applyTheme)` and removes on cleanup.
+  - CSS: `[data-theme="light"]` block overrides `--bg`, `--bg-elev`, `--border`, `--text`,
+    `--text-dim`, `--text-faint`. Light palette: `rgba(242,242,247,alpha)` bg, dark text.
+    Accent colors unchanged — readable on both palettes.
+- **`types.ts`**: `Prefs.opacity: number`, `Prefs.theme: string`, `Theme` type added.
+- **`ipc.ts`**: `setOpacity(value: number)` and `setTheme(value: string)` exports. Default
+  fallback in `fetchPrefs` updated to include `opacity: 92` and `theme: "system"`.
+- **`App.tsx`**: `DEFAULT_PREFS` updated; `opacity` and `theme` props passed to `MonitorWindow`.
+- **Locale files** (all 8): `preferences.title`, `preferences.opacity`, `preferences.theme`,
+  `preferences.theme_system`, `preferences.theme_dark`, `preferences.theme_light` added.
+- **New test**: `prefs_serde_defaults_for_missing_fields` — verifies old JSON without the
+  new fields deserializes to `opacity: 92`, `theme: "system"`. Test count: 47 → 48.
+- **Verification**: `cargo check` 0 errors · `cargo test` 48/48 · `tsc --noEmit` 0 errors ·
+  `npm run build` clean.
+
+## 2026-06-08
+
+### Preferences window removed — theme and opacity moved to tray submenus
+
+- **What**: Reverted the dedicated Preferences window in favour of native tray
+  submenus. Opacity is now preset-based (six steps: 100% / 90% / 80% / 70% /
+  60% / 50%) because native menus cannot host sliders.
+- **tray.rs**: `build_menu()` extracted as a standalone function (called on startup
+  and after each change). Theme submenu (`SubmenuBuilder` + three `CheckMenuItemBuilder`)
+  and opacity submenu (six presets). After any theme/opacity change the menu is
+  rebuilt via `rebuild_menu()` so check marks reflect the new state.
+  `open_preferences_window()` helper removed.
+- **main.rs**: `set_opacity` and `set_theme` Tauri commands removed (no longer
+  called from JS). `use tauri::Emitter` import removed (unused after the removal).
+- **tauri.conf.json**: second window definition (`label: "preferences"`) removed.
+  Trailing comma fixed.
+- **src/components/Preferences.tsx**: deleted.
+- **src/main.tsx**: label-based routing removed; always renders `<App/>`.
+- **src/lib/ipc.ts**: `setOpacity` / `setTheme` exports removed.
+- **i18n.rs**: `preferences` field removed from `TrayStrings`; five new fields
+  added: `theme`, `theme_system`, `theme_dark`, `theme_light`, `opacity` — all
+  8 languages.
+- **Frontend locales** (en/es/pt/de/fr/it/ca/ru): `preferences.*` block removed
+  from all 8 files.
+- **Verification**: `cargo check` 0 errors · `cargo test` 48/48 · `tsc --noEmit`
+  0 errors · `npm run build` clean.
+
 ---
 
-_Final verification: `cargo check` 0 errors · `cargo test` 47/47 · `tsc --noEmit` 0 errors · `npm run build` clean._
+_Final verification: `cargo check` 0 errors · `cargo test` 48/48 · `tsc --noEmit` 0 errors · `npm run build` clean._

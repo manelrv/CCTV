@@ -30,7 +30,8 @@ are managed by the supervisor files lifecycle).
 
 - `main.rs` — entry point. Starts Tauri, registers `tauri-plugin-autostart`,
   initializes `PrefsState` as managed state, launches the axum server, the jobs
-  watcher, and the reaper. Exposes commands `get_instances` and `get_prefs`.
+  watcher, and the reaper. Exposes commands `get_instances`, `get_prefs`,
+  `focus_session`, and `resize_monitor`.
 - `server.rs` — axum router. One route per event/subtype (see `docs/HOOKS.md`).
   Each handler: parses → applies to the store → calls `refresh::refresh()` → responds `200`.
 - `state.rs` — `InstanceState` (enum with `Completed` and `Error`), `Instance`
@@ -51,9 +52,12 @@ are managed by the supervisor files lifecycle).
   (same precaution as `set_panel_visible`) because `UNUserNotificationCenter` on
   macOS expects main-thread calls. Also exports `apply_auto_hide()`, `tray_variant()`,
   and `newly_attention()` (all testable without Tauri runtime).
-- `tray.rs` — system tray icon + preferences menu. All toggles wired up: floating,
-  always_on_top, auto_hide, compact (emits "prefs" event to the frontend), open_at_login
-  (via `tauri-plugin-autostart`). `persist_and_sync()` updates disk + managed state.
+- `tray.rs` — system tray icon + menu. All toggles wired: floating, always_on_top,
+  auto_hide, compact (emits "prefs" event), open_at_login (via `tauri-plugin-autostart`).
+  **Theme submenu**: System / Dark / Light (`CheckMenuItem`). **Opacity submenu**: presets
+  100%–50% (`CheckMenuItem`). Both emit "prefs" and call `rebuild_menu()` so check marks
+  stay in sync. `build_menu()` extracted as a standalone function called on startup and
+  after every change. `persist_and_sync()` updates disk + managed state.
 - `config.rs` — preferences persistence. `load_from_path()` and
   `default_prefs_path()` allow initializing `PrefsState` before setup().
 - `focus.rs` — macOS-only (`#![cfg(target_os = "macos")]`). `focus_terminal(term: &TerminalRef) -> bool`
@@ -86,23 +90,66 @@ are managed by the supervisor files lifecycle).
 
 ## Frontend (src)
 
-- `App.tsx` — subscribes to the `instances` Tauri event, stores the snapshot in
-  state, renders `MonitorWindow`.
+- `main.tsx` — always renders `<App/>`. No window-label routing (the preferences
+  window was removed).
+- `App.tsx` — subscribes to the `instances` and `prefs` Tauri events, stores
+  the snapshot in state, renders `MonitorWindow` passing `opacity` and `theme`.
 - `components/MonitorWindow.tsx` — the panel: title bar (draggable area),
-  count summary, list of rows **sorted by urgency**.
+  count summary, list of rows **sorted by urgency**. Also owns the
+  **auto-resize** logic: a `ResizeObserver` on the root `.panel` div
+  measures `scrollHeight` after each render, clamps it to `[120, 600]` px,
+  and calls `getCurrentWindow().setSize(LogicalSize(360, target))` only when
+  the clamped value differs from the last sent height (feedback-loop guard).
+  The effect re-runs on `[instances, compact]` changes. `.panel` uses
+  `min-height: 100%` (not `height: 100%`) so `scrollHeight` reflects the
+  natural content height; `.list` uses `overflow-y: auto` so rows beyond
+  600 px scroll within the capped window.
+  Also applies **opacity** and **theme** from prefs: sets `--panel-opacity` on
+  `:root` and `data-theme="dark"|"light"` on `<html>`. When theme is "system",
+  listens to `matchMedia("(prefers-color-scheme: dark)")` for live OS changes.
 - `components/InstanceRow.tsx` — one row: color dot + project + detail +
   state + time in state.
-- `lib/ipc.ts` — wrapper for Tauri's `listen()`.
-- `types.ts` — TypeScript mirror of the Rust types.
+- `lib/ipc.ts` — wrappers for Tauri `listen()` and `invoke()`.
+- `types.ts` — TypeScript mirror of the Rust types. `Prefs` now includes
+  `opacity: number` and `theme: string`.
 
 ## Pushing state to the webview
 
-`refresh::refresh(app, store)` is the ONLY emission point. It is called by `server.rs`,
-`jobs.rs`, and the reaper in `main.rs`. It emits two events:
+`refresh::refresh(app, store)` is the ONLY snapshot emission point. It is called by
+`server.rs`, `jobs.rs`, and the reaper in `main.rs`. It emits two events:
 - `"instances"` — full snapshot of instances (the array; no diffs).
-- `"prefs"` — only when a preference changes (compact toggle from `tray.rs`).
+- `"prefs"` — emitted by `tray.rs` on any toggle, and by the new `set_opacity` /
+  `set_theme` commands. Carries the full `Prefs` struct so the monitor and
+  preferences window stay in sync.
 
 The frontend listens with `listen()`. No polling.
+
+## Opacity and theme flow
+
+```
+Tray menu (pick theme / opacity preset)
+  → tray.rs handle_menu: update prefs, save, emit("prefs", &prefs), rebuild_menu()
+    → onPrefs callback in App.tsx → setPrefs → MonitorWindow re-renders
+      → useEffect([opacity, theme]):
+          document.documentElement.style.setProperty("--panel-opacity", value/100)
+          document.documentElement.setAttribute("data-theme", "dark"|"light")
+```
+
+- `--panel-opacity` drives the CSS variable used in `--bg: rgba(28,28,30,var(--panel-opacity))`.
+  Only the panel background alpha changes; text is always fully opaque.
+- `[data-theme="light"]` block in `styles.css` overrides color tokens with a light palette
+  (light panel bg, dark text, adjusted borders). Accent colors (permission/input/working/etc.)
+  are unchanged — they read clearly on both palettes.
+- "system": resolved at runtime via `matchMedia("(prefers-color-scheme: dark)")`.
+  The media query listener is added/removed reactively when theme changes.
+
+## Single window
+
+`tauri.conf.json` defines one window:
+- `"monitor"` — the NSPanel (frameless, transparent, always-on-top, starts hidden).
+
+Theme and opacity are controlled entirely from the tray submenus; there is no
+second settings window. `main.tsx` always renders `<App/>`.
 
 ## Floating window
 
@@ -168,9 +215,9 @@ non-macOS platform), they fall back to `get_webview_window`.
 
 - `always_on_top` + transparency without friction. `skipTaskbar` hides from the taskbar.
 
-## System tray and preferences
+## System tray
 
-Menu with toggles (state persisted in `config.rs` + `PrefsState` managed state):
+Menu with toggles and submenus (state persisted in `config.rs` + `PrefsState` managed state):
 
 - `floating_window` — show/hide the window.
 - `always_on_top` — pin on top (`set_always_on_top`).
@@ -179,6 +226,16 @@ Menu with toggles (state persisted in `config.rs` + `PrefsState` managed state):
 - `compact` — compact mode: emits "prefs" event to the frontend, which applies
   the CSS class `.compact` (hides `.detail`, reduces padding). No reload.
 - `open_at_login` — autostart via `tauri-plugin-autostart` (LaunchAgent on macOS).
+- **Theme submenu** — System / Dark / Light as `CheckMenuItem`. Emits "prefs" + rebuilds menu.
+- **Opacity submenu** — presets 100% / 90% / 80% / 70% / 60% / 50% as `CheckMenuItem`.
+  Check mark on the preset nearest to the stored value. Emits "prefs" + rebuilds menu.
 
 The icon alternates between calm and alert based on `attention_count()`. On macOS the
 system tray title shows the number of instances requesting attention.
+
+`Prefs` struct (config.rs) fields:
+- `floating_window`, `always_on_top`, `auto_hide`, `compact`, `open_at_login` — existing toggles.
+- `opacity: u8` (30..=100, default 92) — panel background alpha percent.
+- `theme: String` ("system" | "dark" | "light", default "system") — UI palette.
+Both fields use `#[serde(default = "...")]` so existing `prefs.json` files that lack
+them deserialize correctly to defaults.

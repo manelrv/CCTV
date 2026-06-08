@@ -35,3 +35,8 @@ tempfile = "3"
 # level 101 correctly applied). NSPanel subclass is required.
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+# Native NSWindow resize: setSize() is a no-op on decorations:false windows
+# (tauri#11975), so we set the frame directly. Versions match what tauri pulls in.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSResponder", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSGeometry"] }

@@ -4,6 +4,14 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+fn default_opacity() -> u8 {
+    92
+}
+
+fn default_theme() -> String {
+    "system".to_string()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Prefs {
@@ -12,6 +20,10 @@ pub struct Prefs {
     pub auto_hide: bool,
     pub compact: bool,
     pub open_at_login: bool,
+    #[serde(default = "default_opacity")]
+    pub opacity: u8,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 impl Default for Prefs {
@@ -22,6 +34,8 @@ impl Default for Prefs {
             auto_hide: false,
             compact: false,
             open_at_login: true,
+            opacity: default_opacity(),
+            theme: default_theme(),
         }
     }
 }
