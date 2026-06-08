@@ -39,7 +39,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
 /// Called once on startup and again after every theme/opacity change so
 /// the check marks reflect the new selection.
 fn build_menu(app: &AppHandle, prefs: &config::Prefs) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    let s = i18n::strings(i18n::Lang::detect());
+    let s = i18n::strings(i18n::Lang::from_pref(&prefs.language));
 
     // --- toggles ---
     let show = MenuItemBuilder::with_id("show", s.show_window).build(app)?;
@@ -99,6 +99,27 @@ fn build_menu(app: &AppHandle, prefs: &config::Prefs) -> tauri::Result<tauri::me
     }
     let opacity_sub = opacity_builder.build()?;
 
+    // --- language submenu ---
+    // "Automatic" follows the system locale; explicit entries pin a language.
+    // Each language is shown in its own native name (i18n::LANGUAGES).
+    let lang_auto = CheckMenuItemBuilder::with_id("lang_auto", s.language_auto)
+        .checked(prefs.language.is_empty() || prefs.language == "auto")
+        .build(app)?;
+    let lang_items: Vec<_> = i18n::LANGUAGES
+        .iter()
+        .map(|&(code, name)| {
+            CheckMenuItemBuilder::with_id(format!("lang_{code}"), name)
+                .checked(prefs.language == code)
+                .build(app)
+        })
+        .collect::<Result<_, _>>()?;
+
+    let mut language_builder = SubmenuBuilder::new(app, s.language).item(&lang_auto);
+    for item in &lang_items {
+        language_builder = language_builder.item(item);
+    }
+    let language_sub = language_builder.build()?;
+
     // --- quit ---
     let quit = MenuItemBuilder::with_id("quit", s.quit).build(app)?;
 
@@ -114,6 +135,7 @@ fn build_menu(app: &AppHandle, prefs: &config::Prefs) -> tauri::Result<tauri::me
         .separator()
         .item(&theme_sub)
         .item(&opacity_sub)
+        .item(&language_sub)
         .separator()
         .item(&quit)
         .build()
@@ -147,6 +169,20 @@ fn handle_menu(app: &AppHandle, id: &str) {
         }
         "theme_light" => {
             prefs.theme = "light".to_string();
+            let _ = app.emit("prefs", &prefs);
+            persist_and_sync(app, &prefs);
+            rebuild_menu(app, &prefs);
+        }
+
+        "lang_auto" => {
+            prefs.language = "auto".to_string();
+            let _ = app.emit("prefs", &prefs);
+            persist_and_sync(app, &prefs);
+            rebuild_menu(app, &prefs);
+        }
+
+        id if id.starts_with("lang_") => {
+            prefs.language = id.trim_start_matches("lang_").to_string();
             let _ = app.emit("prefs", &prefs);
             persist_and_sync(app, &prefs);
             rebuild_menu(app, &prefs);

@@ -33,8 +33,8 @@ does comes to you.
 - **Dead-session reaper** — foreground sessions killed without cleanup turn to
   *No signal* after 3 minutes and are dropped after 30.
 - **8 languages** — English (default), Spanish, Portuguese, German, French,
-  Italian, Catalan, Russian. Detected from system locale, correct plural rules
-  included.
+  Italian, Catalan, Russian. Auto-detected from the system locale, or pinned
+  manually from the tray's **Language** submenu. Correct plural rules included.
 - **Scriptable introspection** — `GET 127.0.0.1:8787/debug/snapshot` returns
   the full store as JSON (loopback only).
 
@@ -86,7 +86,8 @@ Background sessions require no setup.
 
 Functionally complete on macOS: hybrid sources verified against real sessions,
 state machine and reaper covered by unit tests plus live kill tests, dynamic
-tray with working preferences, i18n, and fullscreen float. 15 passing tests.
+tray with working preferences, i18n (auto-detect + manual override), and
+fullscreen float. 48 passing tests.
 
 Pending: Linux/Wayland (Hyprland rules drafted in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)), Windows build, and

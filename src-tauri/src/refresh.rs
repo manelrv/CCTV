@@ -116,7 +116,11 @@ pub fn refresh(app: &AppHandle, store: &Arc<Store>) {
         *attn_state.0.lock().unwrap() = current;
 
         if !to_notify.is_empty() {
-            let lang = i18n::Lang::detect();
+            // Honour the language preference; fall back to system locale ("auto").
+            let lang = app
+                .try_state::<PrefsState>()
+                .map(|p| i18n::Lang::from_pref(&p.0.lock().unwrap().language))
+                .unwrap_or_else(i18n::Lang::detect);
             let strings = i18n::strings(lang);
             let app2 = app.clone();
             // Threading note: tauri-plugin-notification uses notify-rust on macOS,
@@ -263,6 +267,7 @@ mod tests {
             open_at_login: false,
             opacity: 75,
             theme: "dark".to_string(),
+            language: "es".to_string(),
         };
         let json = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&json).unwrap();
@@ -273,6 +278,7 @@ mod tests {
         assert!(!back.open_at_login);
         assert_eq!(back.opacity, 75);
         assert_eq!(back.theme, "dark");
+        assert_eq!(back.language, "es");
     }
 
     #[test]

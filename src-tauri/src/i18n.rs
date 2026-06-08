@@ -16,13 +16,31 @@ pub enum Lang {
     Ru,
 }
 
+/// Supported language codes, in menu display order. The first item is the
+/// fallback. Each pairs the BCP-47 subtag with its native display name.
+pub const LANGUAGES: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("es", "Español"),
+    ("pt", "Português"),
+    ("de", "Deutsch"),
+    ("fr", "Français"),
+    ("it", "Italiano"),
+    ("ca", "Català"),
+    ("ru", "Русский"),
+];
+
 impl Lang {
     /// Detects the system language from the locale, discarding the region.
     pub fn detect() -> Self {
         let locale = get_locale().unwrap_or_default();
         // Take only the language subtag (e.g. "es-ES" → "es").
         let lang = locale.split(['-', '_']).next().unwrap_or("").to_lowercase();
-        match lang.as_str() {
+        Self::from_code(&lang)
+    }
+
+    /// Maps a BCP-47 language subtag to a `Lang`, falling back to English.
+    pub fn from_code(code: &str) -> Self {
+        match code {
             "es" => Lang::Es,
             "pt" => Lang::Pt,
             "de" => Lang::De,
@@ -31,6 +49,15 @@ impl Lang {
             "ca" => Lang::Ca,
             "ru" => Lang::Ru,
             _ => Lang::En,
+        }
+    }
+
+    /// Resolves the language to use from the `language` preference:
+    /// "auto" (or empty) follows the system locale, otherwise the explicit code.
+    pub fn from_pref(pref: &str) -> Self {
+        match pref {
+            "" | "auto" => Self::detect(),
+            code => Self::from_code(code),
         }
     }
 }
@@ -47,6 +74,8 @@ pub struct TrayStrings {
     pub theme_dark: &'static str,
     pub theme_light: &'static str,
     pub opacity: &'static str,
+    pub language: &'static str,
+    pub language_auto: &'static str,
     pub quit: &'static str,
     /// Notification body when an instance enters WaitingPermission.
     pub notif_permission: &'static str,
@@ -68,6 +97,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Oscuro",
             theme_light: "Claro",
             opacity: "Opacidad",
+            language: "Idioma",
+            language_auto: "Automático",
             quit: "Salir",
             notif_permission: "Esperando tu aprobación",
             notif_input: "Esperando tu respuesta",
@@ -84,6 +115,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Escuro",
             theme_light: "Claro",
             opacity: "Opacidade",
+            language: "Idioma",
+            language_auto: "Automático",
             quit: "Sair",
             notif_permission: "Aguardando sua aprovação",
             notif_input: "Aguardando sua resposta",
@@ -100,6 +133,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Dunkel",
             theme_light: "Hell",
             opacity: "Deckkraft",
+            language: "Sprache",
+            language_auto: "Automatisch",
             quit: "Beenden",
             notif_permission: "Wartet auf deine Genehmigung",
             notif_input: "Wartet auf deine Antwort",
@@ -116,6 +151,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Sombre",
             theme_light: "Clair",
             opacity: "Opacité",
+            language: "Langue",
+            language_auto: "Automatique",
             quit: "Quitter",
             notif_permission: "En attente de votre approbation",
             notif_input: "En attente de votre réponse",
@@ -132,6 +169,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Scuro",
             theme_light: "Chiaro",
             opacity: "Opacità",
+            language: "Lingua",
+            language_auto: "Automatico",
             quit: "Esci",
             notif_permission: "In attesa della tua approvazione",
             notif_input: "In attesa della tua risposta",
@@ -148,6 +187,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Fosc",
             theme_light: "Clar",
             opacity: "Opacitat",
+            language: "Idioma",
+            language_auto: "Automàtic",
             quit: "Surt",
             notif_permission: "Esperant la teva aprovació",
             notif_input: "Esperant la teva resposta",
@@ -164,6 +205,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Тёмная",
             theme_light: "Светлая",
             opacity: "Прозрачность",
+            language: "Язык",
+            language_auto: "Автоматически",
             quit: "Выйти",
             notif_permission: "Ожидает вашего разрешения",
             notif_input: "Ожидает вашего ответа",
@@ -181,6 +224,8 @@ pub fn strings(lang: Lang) -> TrayStrings {
             theme_dark: "Dark",
             theme_light: "Light",
             opacity: "Opacity",
+            language: "Language",
+            language_auto: "Automatic",
             quit: "Quit",
             notif_permission: "Waiting for your approval",
             notif_input: "Waiting for your input",

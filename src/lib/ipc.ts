@@ -34,6 +34,7 @@ export async function fetchPrefs(): Promise<Prefs> {
       open_at_login: true,
       opacity: 92,
       theme: "system",
+      language: "auto",
     };
   }
 }

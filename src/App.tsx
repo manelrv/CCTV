@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MonitorWindow } from "./components/MonitorWindow";
 import { fetchInstances, fetchPrefs, onInstances, onPrefs } from "./lib/ipc";
+import { applyLanguagePref } from "./i18n";
 import type { Instance, Prefs } from "./types";
 
 const DEFAULT_PREFS: Prefs = {
@@ -11,6 +12,7 @@ const DEFAULT_PREFS: Prefs = {
   open_at_login: true,
   opacity: 92,
   theme: "system",
+  language: "auto",
 };
 
 export default function App() {
@@ -20,11 +22,17 @@ export default function App() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
+    // Apply prefs to state and switch the UI language to match the preference.
+    const applyPrefs = (p: Prefs) => {
+      applyLanguagePref(p.language);
+      setPrefs(p);
+    };
+
     fetchInstances().then(setInstances);
-    fetchPrefs().then(setPrefs);
+    fetchPrefs().then(applyPrefs);
 
     const unlistenInstances = onInstances(setInstances);
-    const unlistenPrefs = onPrefs(setPrefs);
+    const unlistenPrefs = onPrefs(applyPrefs);
 
     return () => {
       unlistenInstances.then((fn) => fn());

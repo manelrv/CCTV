@@ -9,6 +9,8 @@ export interface Prefs {
   opacity: number;
   /** UI theme: "system" | "dark" | "light". Default "system". */
   theme: string;
+  /** UI language: "auto" or a supported code (en/es/pt/de/fr/it/ca/ru). Default "auto". */
+  language: string;
 }
 
 export type Theme = "system" | "dark" | "light";

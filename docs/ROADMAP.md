@@ -140,6 +140,17 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
   - `Prefs.opacity` / `Prefs.theme` remain; the "prefs" event flow to MonitorWindow is unchanged.
   - Light palette: `[data-theme="light"]` in `styles.css` — `rgba(242,242,247,alpha)`
     bg, dark text, adjusted borders. Accent colors unchanged.
+- [x] Language submenu in the tray — manual UI language override.
+  - `Prefs.language`: `"auto"` (follow system locale) or a supported code
+    (`en`/`es`/`pt`/`de`/`fr`/`it`/`ca`/`ru`). Default `"auto"`.
+  - Tray submenu (below Opacity): "Automatic" + the 8 languages shown in their
+    native names (`i18n::LANGUAGES`). Check mark on the active selection.
+  - `i18n.rs`: `Lang::from_pref` / `from_code`; `language` + `language_auto`
+    labels added in all 8 locales.
+  - Selecting emits "prefs" and rebuilds the menu so it re-renders in the new
+    language. Frontend `applyLanguagePref` (`i18n/index.ts`) calls
+    `i18next.changeLanguage` on every "prefs" event → window switches live.
+  - Notifications (`refresh.rs`) now follow the pref instead of `Lang::detect()`.
 
 ## Ideas / backlog
 - Session time history (SQLite) for metrics.

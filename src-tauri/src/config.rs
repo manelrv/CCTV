@@ -12,6 +12,10 @@ fn default_theme() -> String {
     "system".to_string()
 }
 
+fn default_language() -> String {
+    "auto".to_string()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Prefs {
@@ -24,6 +28,10 @@ pub struct Prefs {
     pub opacity: u8,
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// UI language: "auto" (follow system locale) or a supported code
+    /// ("en", "es", "pt", "de", "fr", "it", "ca", "ru"). Default "auto".
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for Prefs {
@@ -36,6 +44,7 @@ impl Default for Prefs {
             open_at_login: true,
             opacity: default_opacity(),
             theme: default_theme(),
+            language: default_language(),
         }
     }
 }

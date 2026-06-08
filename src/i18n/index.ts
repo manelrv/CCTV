@@ -19,6 +19,18 @@ function detectLanguage(): string {
   return (SUPPORTED as readonly string[]).includes(lang) ? lang : "en";
 }
 
+/**
+ * Applies the `language` preference: "auto" (or empty/unknown) follows the
+ * browser locale, an explicit supported code pins that language.
+ */
+export function applyLanguagePref(pref: string): void {
+  const next =
+    pref && (SUPPORTED as readonly string[]).includes(pref) ? pref : detectLanguage();
+  if (i18next.language !== next) {
+    i18next.changeLanguage(next);
+  }
+}
+
 i18next.use(initReactI18next).init({
   lng: detectLanguage(),
   fallbackLng: "en",

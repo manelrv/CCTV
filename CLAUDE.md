@@ -96,7 +96,12 @@ merged into `~/.claude/settings.json` (see `docs/HOOKS.md#instalación`).
 
 ## Current status
 
-Initial scaffold. The core (hook types, server routes, state machine, reaper TTL,
-basic system tray, React window with UI) is sketched out and coherent, but
-**has not been compiled or tested yet**. First task: get `npm run tauri dev` to
-compile and start. See `docs/ROADMAP.md` phase 0.
+**Functionally complete on macOS.** Both sources (jobs watcher + HTTP hooks),
+the merge store, reaper TTL, dynamic tray icon, desktop notifications,
+click-to-copy / click-to-focus, context-token display, and fullscreen float
+(NSPanel) all work and are verified against real sessions. Tray preferences are
+live: floating window, always on top, auto-hide, compact, open at login, theme,
+opacity, and **language** (auto-detect + manual override). 48 passing tests.
+
+Pending: Linux/Wayland (Hyprland rules), Windows build. See `docs/ROADMAP.md`
+for the full phase history and backlog.
