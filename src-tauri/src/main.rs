@@ -15,9 +15,134 @@ mod state;
 mod transcript;
 mod tray;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Manager;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+/// Cursor through the attention-needing instances for the global hotkey cycle.
+struct HotkeyCursor(Mutex<usize>);
+
+/// Returns the next focusable instance index and the updated cursor value.
+///
+/// - `instances`: the slice of attention-needing instances to cycle through.
+/// - `cursor`: the current position (may be out of range after the slice shrinks).
+///
+/// Behaviour:
+/// - Returns `(None, 0)` when `instances` is empty.
+/// - Clamps `cursor` to `cursor % len` on entry (handles stale cursors after shrink).
+/// - Skips instances with `terminal = None` (background-only; nothing to focus).
+/// - Loops at most `instances.len()` times to avoid infinite loops when nothing is focusable.
+/// - Returns `(None, 0)` when all instances have `terminal = None`.
+/// - Returns `(Some(idx), next_cursor)` where `next_cursor = (idx + 1) % len`.
+fn next_focusable(instances: &[state::Instance], cursor: usize) -> (Option<usize>, usize) {
+    let len = instances.len();
+    if len == 0 {
+        return (None, 0);
+    }
+    let start = cursor % len;
+    for offset in 0..len {
+        let idx = (start + offset) % len;
+        if instances[idx].terminal.is_some() {
+            return (Some(idx), (idx + 1) % len);
+        }
+    }
+    (None, 0)
+}
+
+#[cfg(test)]
+mod hotkey_tests {
+    use super::*;
+    use crate::state::{Instance, InstanceState, Source, TerminalRef};
+
+    fn make_instance(id: &str, has_terminal: bool) -> Instance {
+        Instance {
+            session_id: id.to_string(),
+            cwd: "/tmp".to_string(),
+            project: id.to_string(),
+            state: InstanceState::WaitingInput,
+            detail: None,
+            source: Source::Foreground,
+            started_at: 0,
+            last_event_at: 0,
+            context_tokens: None,
+            in_flight_tasks: None,
+            terminal: if has_terminal {
+                Some(TerminalRef {
+                    program: "iTerm.app".to_string(),
+                    session_id: None,
+                    tty: Some("ttys001".to_string()),
+                    focus_url: None,
+                })
+            } else {
+                None
+            },
+        }
+    }
+
+    #[test]
+    fn test_empty_set() {
+        let instances: Vec<Instance> = vec![];
+        let (idx, cursor) = next_focusable(&instances, 0);
+        assert_eq!(idx, None);
+        assert_eq!(cursor, 0);
+    }
+
+    #[test]
+    fn test_all_background() {
+        // All instances have terminal = None (background); nothing to focus.
+        let instances = vec![
+            make_instance("a", false),
+            make_instance("b", false),
+            make_instance("c", false),
+        ];
+        let (idx, cursor) = next_focusable(&instances, 0);
+        assert_eq!(idx, None);
+        assert_eq!(cursor, 0);
+    }
+
+    #[test]
+    fn test_single_foreground() {
+        // One instance with a terminal; cursor at 0 → picks index 0 and advances to 1 % 1 = 0.
+        let instances = vec![make_instance("a", true)];
+        let (idx, cursor) = next_focusable(&instances, 0);
+        assert_eq!(idx, Some(0));
+        assert_eq!(cursor, 0); // (0 + 1) % 1 = 0
+    }
+
+    #[test]
+    fn test_multiple_foreground_wrap() {
+        // Two foreground instances; cursor at 1 → picks index 1, then wraps to 0.
+        let instances = vec![make_instance("a", true), make_instance("b", true)];
+        let (idx, cursor) = next_focusable(&instances, 1);
+        assert_eq!(idx, Some(1));
+        assert_eq!(cursor, 0); // (1 + 1) % 2 = 0
+    }
+
+    #[test]
+    fn test_foreground_background_mix() {
+        // index 0 = background, index 1 = foreground, index 2 = background.
+        // cursor = 0 → skips index 0, lands on index 1.
+        let instances = vec![
+            make_instance("a", false),
+            make_instance("b", true),
+            make_instance("c", false),
+        ];
+        let (idx, cursor) = next_focusable(&instances, 0);
+        assert_eq!(idx, Some(1));
+        assert_eq!(cursor, 2); // (1 + 1) % 3 = 2
+    }
+
+    #[test]
+    fn test_cursor_past_end_after_shrink() {
+        // cursor = 5 on a 2-element slice → clamp-on-read: 5 % 2 = 1.
+        // Index 1 has a terminal → returns (Some(1), (1+1)%2 = 0).
+        let instances = vec![make_instance("a", true), make_instance("b", true)];
+        let (idx, cursor) = next_focusable(&instances, 5);
+        assert_eq!(idx, Some(1));
+        assert_eq!(cursor, 0); // (1 + 1) % 2 = 0
+    }
+}
 
 fn main() {
     let store = Arc::new(state::Store::default());
@@ -38,7 +163,8 @@ fn main() {
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
-        ));
+        ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -47,6 +173,7 @@ fn main() {
         .manage(store.clone())
         .manage(prefs_state)
         .manage(refresh::AttentionState::default())
+        .manage(HotkeyCursor(Mutex::new(0usize)))
         .setup({
             let store = store.clone();
             move |app| {
@@ -99,6 +226,69 @@ fn main() {
 
                 // Tray.
                 tray::build(&handle)?;
+
+                // Global hotkey: CmdOrCtrl+Shift+Space — cycle through attention-needing instances.
+                // The handler is registered here and runs on the global-shortcut event thread.
+                // All async work is dispatched via tauri::async_runtime::spawn to avoid
+                // AppKit main-thread deadlocks (NSPanel/focus calls must not run on the
+                // event thread directly).
+                {
+                    let store_hk = store.clone();
+                    let handle_hk = handle.clone();
+                    app.global_shortcut().on_shortcut(
+                        "CmdOrCtrl+Shift+Space",
+                        move |_app, _shortcut, event| {
+                            // Ignore key-release; act only on the initial press.
+                            if event.state == ShortcutState::Released {
+                                return;
+                            }
+
+                            let store_inner = store_hk.clone();
+                            let handle_inner = handle_hk.clone();
+                            tauri::async_runtime::spawn(async move {
+                                // Collect attention-needing instances from the store.
+                                let attention: Vec<state::Instance> = store_inner
+                                    .snapshot()
+                                    .into_iter()
+                                    .filter(|i| i.state.needs_attention())
+                                    .collect();
+
+                                // Advance cursor and find the next focusable instance.
+                                let chosen_terminal = {
+                                    let cursor_state =
+                                        handle_inner.state::<HotkeyCursor>();
+                                    let mut cursor =
+                                        cursor_state.0.lock().unwrap();
+                                    let (maybe_idx, new_cursor) =
+                                        next_focusable(&attention, *cursor);
+                                    *cursor = new_cursor;
+                                    maybe_idx.and_then(|idx| attention[idx].terminal.clone())
+                                };
+
+                                match chosen_terminal {
+                                    Some(term) => {
+                                        // macOS: focus the terminal hosting the session.
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            focus::focus_terminal(&term);
+                                        }
+                                        // Non-macOS: no terminal focus API; raise the CCTV window.
+                                        #[cfg(not(target_os = "macos"))]
+                                        {
+                                            let _ = term; // term is unused on non-macOS
+                                            refresh::set_panel_visible(&handle_inner, true);
+                                        }
+                                    }
+                                    None => {
+                                        // Nothing focusable (empty set or all background):
+                                        // raise the CCTV window so the user can see the panel.
+                                        refresh::set_panel_visible(&handle_inner, true);
+                                    }
+                                }
+                            });
+                        },
+                    )?;
+                }
 
                 Ok(())
             }

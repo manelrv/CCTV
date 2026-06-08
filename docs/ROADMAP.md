@@ -152,6 +152,13 @@ Mark `[x]` when done. Each phase should leave the app in a runnable state.
     `i18next.changeLanguage` on every "prefs" event → window switches live.
   - Notifications (`refresh.rs`) now follow the pref instead of `Lang::detect()`.
 
+## Extras (continued)
+- [x] Global hotkey `CmdOrCtrl+Shift+Space` — cycle through attention-needing instances.
+      Presses focus the next foreground session's terminal (macOS, via `focus.rs`).
+      If nothing is focusable (empty attention set or all background), raises the CCTV window.
+      `HotkeyCursor` managed state tracks cycle position. Pure fn `next_focusable` with 6 unit tests.
+      Non-macOS compiles with raise-window fallback only. `tauri-plugin-global-shortcut v2.3.2`.
+
 ## Ideas / backlog
 - Session time history (SQLite) for metrics.
 - Sub-agents: `SubagentStart`/`SubagentStop` as nested sub-rows.
