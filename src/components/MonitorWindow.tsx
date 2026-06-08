@@ -74,7 +74,12 @@ export function MonitorWindow({
       // + borders) = panel height minus the list's visible height.
       const list = el.querySelector<HTMLElement>(".list");
       const listNatural = list ? list.scrollHeight : 0;
-      const chrome = el.clientHeight - (list ? list.clientHeight : 0);
+      // Measure chrome from the panel's BORDER-BOX (offsetHeight), not the
+      // content box (clientHeight): resize_window_keep_top sets the window's
+      // outer frame, which equals the panel border-box (incl. its 1px border).
+      // Using clientHeight here under-sizes the window by that border, leaving
+      // the list 1px short → a full-height overlay scrollbar on macOS.
+      const chrome = el.offsetHeight - (list ? list.clientHeight : 0);
       const natural = chrome + listNatural;
       const target = Math.min(Math.max(natural, MIN_HEIGHT), MAX_HEIGHT);
 
