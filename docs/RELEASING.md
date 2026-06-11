@@ -75,7 +75,17 @@ Add each of these:
 | `APPLE_PASSWORD` | The app-specific password from step 4 |
 | `APPLE_TEAM_ID` | The 10-char Team ID from step 3 |
 
-That's it — the next tagged release will be signed and notarized automatically.
+### 6. Enable signing in the workflow
+
+The signing env vars are **commented out** in `.github/workflows/release.yml` so
+that unsigned builds work without the secrets. Once the six secrets above exist,
+uncomment the `APPLE_*` lines in the `env:` block of the release job.
+
+> Do **not** uncomment them before the secrets exist. tauri-action would try to
+> import an empty certificate and the build fails with
+> `SecKeychainItemImport: parameters not valid`.
+
+After uncommenting, the next tagged release is signed and notarized automatically.
 
 ## Installing an unsigned build (interim)
 

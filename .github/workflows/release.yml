@@ -40,16 +40,20 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # --- Code signing (Developer ID Application certificate) ---
-          # If these secrets are absent, the app is built UNSIGNED (still works,
-          # but users hit Gatekeeper). See docs/RELEASING.md to set them up.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # --- Notarization (Apple ID method) ---
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # --- Code signing + notarization (DISABLED) ---
+          # The app currently ships UNSIGNED (users bypass Gatekeeper with
+          # `--no-quarantine`; see the README). To enable signing, set the
+          # secrets per docs/RELEASING.md and UNCOMMENT the six lines below.
+          # NOTE: do NOT leave these defined-but-empty — tauri-action then tries
+          # to import an empty certificate and the build fails with
+          # "SecKeychainItemImport: parameters not valid". Comment them out
+          # entirely until the secrets exist.
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           # The tag that triggered the workflow becomes the release tag.
           tagName: ${{ github.ref_name }}
