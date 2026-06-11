@@ -31,9 +31,18 @@ to its terminal.
 
 ## Install
 
-> **Homebrew tap — coming soon.** A signed + notarized `.dmg` ships from the
-> [release pipeline](docs/RELEASING.md) on every tagged release. For now, build
-> from source.
+### Homebrew (recommended)
+
+```bash
+brew install --cask manelrv/tap/cctv
+xattr -dr com.apple.quarantine /Applications/CCTV.app
+```
+
+The second line is needed **for now**: CCTV isn't signed/notarized yet, so macOS
+Gatekeeper quarantines it on install. Clearing that attribute lets it launch —
+or right-click the app → **Open** → **Open** the first time. (Notarization is on
+the roadmap; once it lands, the extra step disappears.) The `.dmg` is built by
+the [release pipeline](docs/RELEASING.md) on every tagged release.
 
 ### Build from source
 
