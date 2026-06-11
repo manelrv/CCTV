@@ -119,7 +119,7 @@ and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ```bash
 npm run tauri dev          # Vite + Rust, opens the app
-cd src-tauri && cargo test # Rust test suite (54 tests)
+cd src-tauri && cargo test # Rust test suite
 ```
 
 ## Project status
@@ -127,10 +127,11 @@ cd src-tauri && cargo test # Rust test suite (54 tests)
 **Functionally complete on macOS.** Hybrid sources verified against real sessions,
 state machine and reaper covered by unit + live-kill tests, dynamic tray with all
 preferences live, i18n (auto-detect + manual), global hotkey, and fullscreen float.
-54 passing tests.
+57 passing tests. Installable via Homebrew; the release pipeline ships a universal
+`.dmg` on every tag.
 
-**Next up:** signed/notarized release + Homebrew tap, then Linux/Wayland (Hyprland
-rules drafted in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) and Windows.
+**Next up:** signing + notarization (to drop the `xattr` step), then Linux/Wayland
+(Hyprland rules drafted in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) and Windows.
 History in [`WORKLOG.md`](WORKLOG.md), phase tracking in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Platforms
