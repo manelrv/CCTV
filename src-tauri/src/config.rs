@@ -85,12 +85,12 @@ pub fn load_from_path(path: Option<PathBuf>) -> Prefs {
 /// Returns the platform-standard path for prefs.json without requiring an
 /// AppHandle. Mirrors Tauri's logic: config_dir + app identifier.
 ///
-/// macOS:   ~/Library/Application Support/com.fedefarma.ccmonitor/prefs.json
-/// Linux:   ~/.config/com.fedefarma.ccmonitor/prefs.json
-/// Windows: %APPDATA%\com.fedefarma.ccmonitor\prefs.json
+/// macOS:   ~/Library/Application Support/com.manelrv.cctv/prefs.json
+/// Linux:   ~/.config/com.manelrv.cctv/prefs.json
+/// Windows: %APPDATA%\com.manelrv.cctv\prefs.json
 pub fn default_prefs_path() -> Option<PathBuf> {
     // The identifier comes from tauri.conf.json -> "identifier".
-    let identifier = "com.fedefarma.ccmonitor";
+    let identifier = "com.manelrv.cctv";
     let dir = dirs::config_dir()?.join(identifier);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join("prefs.json"))
