@@ -201,8 +201,15 @@ fn main() {
                 // The window starts hidden (visible:false). Reveal it now when it
                 // should always be visible. In auto-hide mode it stays hidden until
                 // attention arrives — the first refresh() handles that case.
-                if refresh::show_on_startup(&config::load(&handle)) {
+                let startup_prefs = config::load(&handle);
+                if refresh::show_on_startup(&startup_prefs) {
                     refresh::set_panel_visible(&handle, true);
+                }
+                // setup_panel pins the level to Status; honour an "always on top"
+                // preference that was turned off in a previous session.
+                #[cfg(target_os = "macos")]
+                if !startup_prefs.always_on_top {
+                    macos::set_always_on_top(&handle, false);
                 }
 
                 // Hook server (runs in a tokio task).

@@ -184,6 +184,9 @@ pub fn set_panel_visible(app: &AppHandle, visible: bool) {
             if let Ok(panel) = app2.get_webview_panel("monitor") {
                 if visible {
                     panel.show();
+                    // Surface it above the active window even at Normal level
+                    // (always-on-top off). Nonactivating, so it never steals focus.
+                    panel.order_front_regardless();
                 } else {
                     panel.hide();
                 }

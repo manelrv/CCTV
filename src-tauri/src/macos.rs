@@ -119,3 +119,25 @@ pub fn resize_window_keep_top(window: &WebviewWindow, height: f64) {
     // display:true repaints immediately.
     unsafe { ns_window.setFrame_display(new_frame, true) };
 }
+
+/// Sets the panel's window level to reflect the "always on top" preference.
+///
+/// `setup_panel` pins the level to Status (above fullscreen) so the monitor
+/// floats over everything. To honour the user turning "always on top" OFF we
+/// drop the level to Normal at runtime, so ordinary windows can cover it again.
+/// Turning it back ON restores the Status level. Dispatched to the main thread:
+/// raw NSPanel calls must not run off it.
+pub fn set_always_on_top(app: &tauri::AppHandle, on_top: bool) {
+    use tauri_nspanel::ManagerExt;
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Ok(panel) = app2.get_webview_panel("monitor") {
+            let level = if on_top {
+                PanelLevel::Status
+            } else {
+                PanelLevel::Normal
+            };
+            panel.set_level(level.value());
+        }
+    });
+}

@@ -206,9 +206,11 @@ fn handle_menu(app: &AppHandle, id: &str) {
 
         "toggle_on_top" => {
             prefs.always_on_top = !prefs.always_on_top;
-            // On macOS the panel's level is fixed at NSStatus (25) by setup_panel()
-            // and is managed by the NSPanel subclass — set_always_on_top is a no-op
-            // for the fullscreen guarantee. On other platforms it works normally.
+            // macOS: the window is an NSPanel; toggle its level (Status <-> Normal)
+            // so unchecking actually drops it below other windows. Note: turning
+            // it off also gives up the float-above-fullscreen behaviour.
+            #[cfg(target_os = "macos")]
+            crate::macos::set_always_on_top(app, prefs.always_on_top);
             #[cfg(not(target_os = "macos"))]
             if let Some(w) = app.get_webview_window("monitor") {
                 let _ = w.set_always_on_top(prefs.always_on_top);
