@@ -147,6 +147,16 @@ pub fn refresh(app: &AppHandle, store: &Arc<Store>) {
 /// Applies auto-hide logic: hides the floating window when nothing needs attention
 /// and the toggle is active; shows it when attention is needed (only if floating_window
 /// is enabled, to avoid overriding the user's preference).
+/// Whether the floating panel should be shown immediately on startup.
+///
+/// The window starts hidden (`visible: false` in tauri.conf.json). In auto-hide
+/// mode it stays hidden until something needs attention — the first `refresh()`
+/// reveals it via `apply_auto_hide`. With auto-hide OFF the window is meant to be
+/// always visible, so it must be shown explicitly at startup (nothing else does).
+pub fn show_on_startup(prefs: &Prefs) -> bool {
+    prefs.floating_window && !prefs.auto_hide
+}
+
 pub fn apply_auto_hide(app: &AppHandle, prefs: &Prefs, attention: usize) {
     if !prefs.auto_hide {
         return;
@@ -255,6 +265,25 @@ mod tests {
     fn tray_variant_alert_when_nonzero() {
         assert_eq!(tray_variant(1), TrayVariant::Alert);
         assert_eq!(tray_variant(5), TrayVariant::Alert);
+    }
+
+    #[test]
+    fn show_on_startup_when_floating_and_not_auto_hide() {
+        let prefs = Prefs { floating_window: true, auto_hide: false, ..Prefs::default() };
+        assert!(show_on_startup(&prefs));
+    }
+
+    #[test]
+    fn no_show_on_startup_when_auto_hide_on() {
+        // auto-hide mode keeps the window hidden until attention arrives.
+        let prefs = Prefs { floating_window: true, auto_hide: true, ..Prefs::default() };
+        assert!(!show_on_startup(&prefs));
+    }
+
+    #[test]
+    fn no_show_on_startup_when_floating_disabled() {
+        let prefs = Prefs { floating_window: false, auto_hide: false, ..Prefs::default() };
+        assert!(!show_on_startup(&prefs));
     }
 
     #[test]

@@ -198,6 +198,13 @@ fn main() {
                     let _ = w.set_visible_on_all_workspaces(true);
                 }
 
+                // The window starts hidden (visible:false). Reveal it now when it
+                // should always be visible. In auto-hide mode it stays hidden until
+                // attention arrives — the first refresh() handles that case.
+                if refresh::show_on_startup(&config::load(&handle)) {
+                    refresh::set_panel_visible(&handle, true);
+                }
+
                 // Hook server (runs in a tokio task).
                 let app_state = server::AppState {
                     store: store.clone(),
