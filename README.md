@@ -31,8 +31,9 @@ to its terminal.
 
 ## Install
 
-> **Homebrew tap — coming soon.** Release pipeline (signed + notarized `.dmg`) is in
-> progress. For now, build from source.
+> **Homebrew tap — coming soon.** A signed + notarized `.dmg` ships from the
+> [release pipeline](docs/RELEASING.md) on every tagged release. For now, build
+> from source.
 
 ### Build from source
 

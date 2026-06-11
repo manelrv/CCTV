@@ -1,0 +1,65 @@
+name: Release
+
+# Cut a release by pushing a semver tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# The tag version should match the `version` in src-tauri/tauri.conf.json.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write # tauri-action creates the GitHub Release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Set up Rust (universal targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build, sign, notarize, and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Code signing (Developer ID Application certificate) ---
+          # If these secrets are absent, the app is built UNSIGNED (still works,
+          # but users hit Gatekeeper). See docs/RELEASING.md to set them up.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # --- Notarization (Apple ID method) ---
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          # The tag that triggered the workflow becomes the release tag.
+          tagName: ${{ github.ref_name }}
+          releaseName: 'CCTV ${{ github.ref_name }}'
+          releaseBody: |
+            CCTV — see which Claude Code agent needs you, from the macOS menu bar.
+
+            Download the `.dmg` below, drag CCTV to Applications, and connect the
+            hooks (see the README). Requires macOS.
+          releaseDraft: true # publish manually after reviewing the assets
+          prerelease: false
+          # Single universal binary (Intel + Apple Silicon) — one .dmg for everyone.
+          args: --target universal-apple-darwin
