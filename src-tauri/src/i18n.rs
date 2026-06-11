@@ -64,7 +64,6 @@ impl Lang {
 
 pub struct TrayStrings {
     pub show_window: &'static str,
-    pub floating_window: &'static str,
     pub always_on_top: &'static str,
     pub auto_hide: &'static str,
     pub compact_mode: &'static str,
@@ -87,7 +86,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
     match lang {
         Lang::Es => TrayStrings {
             show_window: "Mostrar ventana",
-            floating_window: "Ventana flotante",
             always_on_top: "Siempre encima",
             auto_hide: "Auto-ocultar si nada me reclama",
             compact_mode: "Modo compacto",
@@ -105,7 +103,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::Pt => TrayStrings {
             show_window: "Mostrar janela",
-            floating_window: "Janela flutuante",
             always_on_top: "Sempre visível",
             auto_hide: "Auto-ocultar se nada precisar de mim",
             compact_mode: "Modo compacto",
@@ -123,7 +120,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::De => TrayStrings {
             show_window: "Fenster anzeigen",
-            floating_window: "Schwebendes Fenster",
             always_on_top: "Immer im Vordergrund",
             auto_hide: "Automatisch ausblenden wenn nichts Aufmerksamkeit braucht",
             compact_mode: "Kompaktmodus",
@@ -141,7 +137,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::Fr => TrayStrings {
             show_window: "Afficher la fenêtre",
-            floating_window: "Fenêtre flottante",
             always_on_top: "Toujours au premier plan",
             auto_hide: "Masquer automatiquement si rien ne nécessite attention",
             compact_mode: "Mode compact",
@@ -159,7 +154,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::It => TrayStrings {
             show_window: "Mostra finestra",
-            floating_window: "Finestra mobile",
             always_on_top: "Sempre in primo piano",
             auto_hide: "Nascondi automaticamente se nulla richiede attenzione",
             compact_mode: "Modalità compatta",
@@ -177,7 +171,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::Ca => TrayStrings {
             show_window: "Mostra la finestra",
-            floating_window: "Finestra flotant",
             always_on_top: "Sempre al damunt",
             auto_hide: "Amaga automàticament si res no em reclama",
             compact_mode: "Mode compacte",
@@ -195,7 +188,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         },
         Lang::Ru => TrayStrings {
             show_window: "Показать окно",
-            floating_window: "Плавающее окно",
             always_on_top: "Поверх всех окон",
             auto_hide: "Скрывать автоматически, если не требуется внимание",
             compact_mode: "Компактный режим",
@@ -214,7 +206,6 @@ pub fn strings(lang: Lang) -> TrayStrings {
         // English is the fallback.
         Lang::En => TrayStrings {
             show_window: "Show window",
-            floating_window: "Floating window",
             always_on_top: "Always on top",
             auto_hide: "Auto-hide when nothing needs attention",
             compact_mode: "Compact mode",

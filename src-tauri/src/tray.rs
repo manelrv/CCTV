@@ -42,8 +42,9 @@ fn build_menu(app: &AppHandle, prefs: &config::Prefs) -> tauri::Result<tauri::me
     let s = i18n::strings(i18n::Lang::from_pref(&prefs.language));
 
     // --- toggles ---
-    let show = MenuItemBuilder::with_id("show", s.show_window).build(app)?;
-    let floating = CheckMenuItemBuilder::with_id("toggle_floating", s.floating_window)
+    // Single visibility toggle (checked = window shown). Replaces the old separate
+    // "Show window" action + "Floating window" toggle, which overlapped and confused.
+    let show = CheckMenuItemBuilder::with_id("toggle_floating", s.show_window)
         .checked(prefs.floating_window)
         .build(app)?;
     let on_top = CheckMenuItemBuilder::with_id("toggle_on_top", s.always_on_top)
@@ -126,7 +127,6 @@ fn build_menu(app: &AppHandle, prefs: &config::Prefs) -> tauri::Result<tauri::me
     MenuBuilder::new(app)
         .item(&show)
         .separator()
-        .item(&floating)
         .item(&on_top)
         .item(&auto_hide)
         .item(&compact)
@@ -152,7 +152,6 @@ fn nearest_preset(value: u8) -> u8 {
 fn handle_menu(app: &AppHandle, id: &str) {
     let mut prefs = config::load(app);
     match id {
-        "show" => toggle_window(app, true),
         "quit" => app.exit(0),
 
         "theme_system" => {
